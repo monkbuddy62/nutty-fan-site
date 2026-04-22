@@ -294,6 +294,9 @@ const MAX_HP = 3;
 
 function damageTarget(target, amount) {
   if (target.dead || target.shooting) return;
+  const now = Date.now();
+  if (now - (target._lastDmg || 0) < 300) return;
+  target._lastDmg = now;
   target.hp = (target.hp || MAX_HP) - amount;
   if (target.hp <= 0) {
     shootTarget(target);
@@ -466,8 +469,6 @@ if (IS_MOBILE) {
     const t0 = e.touches[0];
     swipeCurX = t0.clientX;
     swipeCurY = t0.clientY;
-    mouseX = t0.clientX;
-    mouseY = t0.clientY;
     if (pressActive) { mouseX = t0.clientX; mouseY = t0.clientY; }
     // Movement cancels long press
     if (Math.hypot(t0.clientX - swipeStartX, t0.clientY - swipeStartY) > 12) {
@@ -787,10 +788,6 @@ function loop() {
       t.dx -= (fx / dist) * force;
       t.dy -= (fy / dist) * force;
     }
-
-    // Apply tilt gravity on mobile
-    t.dx += gravityX;
-    t.dy += gravityY;
 
     t.dx *= DAMPING;
     t.dy *= DAMPING;
