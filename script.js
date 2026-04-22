@@ -1,6 +1,7 @@
 const AUDIO_DIR   = 'audio/';
 const MEDIA_DIR   = 'media/';
-const MAX_ON_SCREEN = 12;
+const IS_MOBILE     = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+const MAX_ON_SCREEN = IS_MOBILE ? 6 : 12;
 const BASE_SPEED  = 0.55;
 const MAX_SPEED   = 7;
 const FLEE_RADIUS = 230;
@@ -449,13 +450,15 @@ function shootTarget(target) {
   const W  = window.innerWidth;
   const H  = window.innerHeight;
 
-  // Lock element at its current floated position
-  el.style.left = target.x + 'px';
-  el.style.top  = target.y + 'px';
+  // Move element to body so it shares stacking context with overlay
+  el.style.position   = 'fixed';
+  el.style.left       = target.x + 'px';
+  el.style.top        = target.y + 'px';
   el.style.pointerEvents = 'none';
-  el.style.zIndex = '30';
+  el.style.zIndex     = '30';
+  document.body.appendChild(el);
 
-  // Dim overlay so photo stands out
+  // Dim overlay so photo stands out — z-index 25, below target's 30
   const overlay = document.createElement('div');
   overlay.className = 'kill-overlay';
   document.body.appendChild(overlay);
