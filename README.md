@@ -1,78 +1,35 @@
-# Nutty Sucks™ — Official Fan Site
+# Nutty Sucks™ — Shooting Gallery
 
-A prank website for the ages.
+Photos and videos of Nutty float around the screen. You shoot them. A Nutty audio clip plays on every kill.
 
-## Setup
+## Adding media
 
-### 1. Add your audio files
-
-Copy all your `.wav` files into the `audio/` folder. The filenames must match exactly what's in `script.js`. The files are referenced by the exact names you gave me, so just drop them in and they'll work.
-
-### 2. Test locally
-
-Open `index.html` directly in your browser. Everything works offline — no server needed.
-
-> **Note on audio:** Some browsers block audio on file:// URLs. If clips don't play locally, just push to GitHub Pages and test there — it works fine over https.
-
----
-
-## Deploy to GitHub Pages
-
-### First time setup
-
-You'll need the [GitHub CLI](https://cli.github.com/) installed. If you have it:
-
-```bash
-cd ~/nutty-fan-site
-
-# Initialize git
-git init
+### Step 1 — Windows (where your files are)
+```powershell
+mkdir nutty-fan-site\media
+# drag all your photos/videos into that folder
+cd nutty-fan-site
 git add .
-git commit -m "launch the fan site"
-
-# Create repo and push (replace YOUR_USERNAME)
-gh repo create nutty-fan-site --public --source=. --remote=origin --push
-
-# Enable GitHub Pages
-gh api repos/YOUR_USERNAME/nutty-fan-site/pages \
-  --method POST \
-  -f "source[branch]=main" \
-  -f "source[path]=/"
-```
-
-Your site will be live at: `https://YOUR_USERNAME.github.io/nutty-fan-site/`
-
-(Takes about 60 seconds to go live the first time.)
-
----
-
-### Pushing updates
-
-Every time you change something:
-
-```bash
-cd ~/nutty-fan-site
-git add .
-git commit -m "update"
+git commit -m "add media"
 git push
 ```
 
-The site updates automatically within ~60 seconds. No other steps needed.
+### Step 2 — Linux box (one-time setup + every time you add files)
+```bash
+cd ~/nutty-fan-site
+git pull
+sudo apt install imagemagick   # first time only
+bash convert-heic.sh           # converts HEICs → JPG
+python3 build-manifest.py      # scans media/ and writes manifest.json
+git add . && git commit -m "update media" && git push
+```
 
----
+Site updates at https://monkbuddy62.github.io/nutty-fan-site/ within ~60 seconds.
 
-## Adding new audio clips
+## File size limits
+- GitHub blocks files over 100MB — trim long MP4s if needed
+- Repo soft limit is 1GB total — fine for ~100 photos + short clips
 
-1. Drop the `.wav` file into `audio/`
-2. Add an entry to the `clips` array in `script.js`:
-   ```js
-   { label: 'Button Label Here', file: 'Your File Name.wav' },
-   ```
-3. Push.
-
----
-
-## Combo easter egg
-
-Press these three buttons in order to trigger the chaos combo:
-**"I pee on him"** → **"Shoving bread in the hole"** → **"I will shit on this table"**
+## Local testing
+The site needs a web server to load media (browser blocks fetch on file://).
+Quick option: `python3 -m http.server` then open http://localhost:8000

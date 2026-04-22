@@ -1,287 +1,203 @@
-// === SCROLL REVEAL ===
-const revealBlocks = document.querySelectorAll('.reveal-block');
-const revealObserver = new IntersectionObserver((entries) => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      e.target.classList.add('visible');
-      revealObserver.unobserve(e.target);
-    }
-  });
-}, { threshold: 0.15 });
-revealBlocks.forEach(b => revealObserver.observe(b));
+const AUDIO_DIR = 'audio/';
+const MEDIA_DIR = 'media/';
+const MAX_ON_SCREEN = 12;
+const MIN_SPEED = 0.7;
+const MAX_SPEED = 2.0;
 
-// === TOP 10 — click to toggle reveal ===
-document.querySelectorAll('.moment').forEach(m => {
-  m.addEventListener('click', () => m.classList.toggle('revealed'));
-});
-
-// === RATING ENGINE ===
-const loadingMessages = [
-  'Initializing Nutty scan…',
-  'Scanning neural patterns…',
-  'Detecting nonsense levels…',
-  'Cross-referencing with known idiots…',
-  'Consulting the dice gods…',
-  'Calculating chaos coefficient…',
-  'Results are bad. Preparing bad results…',
+const audioFiles = [
+  'Nuty  this girl is coming on to me.wav',
+  'Nutty- And a 3 inch dick_is that on your char sheet_its going to be now.wav',
+  'Nutty Molly - I start shoving bread in his bleading hole... ew.wav',
+  'Nutty Jake - I shake my head at jake in dissapointment.wav',
+  'Nutty - woah yoiu got that recorded right pat.wav',
+  'Nutty - thats alot of hate i just wanted a blanket.wav',
+  'Nutty - sneaky bite.wav',
+  'nutty - ohh i hate mages.wav',
+  'Nutty - man these mfrers are useless in a fight.wav',
+  'Nutty - ima take that hot iron and ima throw it at the horse.wav',
+  'Nutty - Im nutty im playing a paladin named jake.wav',
+  'Nutty - if you want me to ill shit on this table.wav',
+  'Nutty - I think your just gonna have to shove these up your ass.wav',
+  'Nutty - i pee on him.wav',
+  'nutty - checking my door for traps.wav',
+  'Nutty - can you read dwarven uhh what .wav',
+  'Nutty - can i get that 3.5 inch dick.wav',
+  'Nutty - and a 3 inch dick.wav',
+  'Jake Pat Nut - Nutty shitting on a plate (fulll).wav',
+  'Jake Nuty - Chaos Chaos we live by chaos.wav',
 ];
 
-const resultSets = [
-  {
-    suck: '97%',
-    brain: 'buffering…',
-    loyalty: 'questionable at best',
-    dnd: 'rolled a 1 on intelligence',
-    vibe: 'chaotic neutral (barely)',
-    verdict: '"A man of unique vision." — no one, ever.',
-  },
-  {
-    suck: '84%',
-    brain: '404 Not Found',
-    loyalty: 'sold you out for a blanket',
-    dnd: 'threw a hot iron at the horse',
-    vibe: 'certified pee-er',
-    verdict: '"He just wanted a blanket, okay?" — Nutty\'s defense attorney',
-  },
-  {
-    suck: 'ERROR: value exceeds maximum',
-    brain: '9',
-    loyalty: 'lol',
-    dnd: 'Paladin named Jake (???)',
-    vibe: 'chaotic stupid',
-    verdict: '"I think your just gonna have to shove these up your ass." — Nutty, re: these results',
-  },
-  {
-    suck: '91%',
-    brain: 'critically low',
-    loyalty: 'ran off to check for traps',
-    dnd: 'shoved bread in the wound',
-    vibe: 'sneaky bite energy',
-    verdict: '"He was checking his door for traps the whole time." — eyewitness report',
-  },
-  {
-    suck: '88%',
-    brain: 'offline',
-    loyalty: '"man these mfers are useless"',
-    dnd: '"uhh what" (re: Dwarven)',
-    vibe: 'unhinged paladin',
-    verdict: '"I\'m Nutty. I\'m playing a paladin named Jake." — him, seriously',
-  },
-];
-
-// Glitch result shown on every 5th click
-const glitchResult = {
-  suck: 'WE LIVE BY CHAOS',
-  brain: 'CHAOS',
-  loyalty: 'CHAOS CHAOS',
-  dnd: '🌀 CHAOS 🌀',
-  vibe: 'CHAOS',
-  verdict: 'CHAOS CHAOS WE LIVE BY CHAOS',
+const streakMessages = {
+  3: '🔥 TRIPLE KILL',
+  4: '💀 QUAD KILL',
+  5: '⚡ RAMPAGE',
+  6: '🌀 NUTTY OBLITERATED',
+  7: '☠️ UNSTOPPABLE',
 };
 
-let analyzeCount = 0;
-
-function runAnalysis() {
-  const analyzeBtn = document.getElementById('analyzeBtn');
-  const loadingArea = document.getElementById('loadingArea');
-  const resultsArea = document.getElementById('resultsArea');
-  const progressBar = document.getElementById('progressBar');
-  const loadingStatus = document.getElementById('loadingStatus');
-
-  analyzeBtn.classList.add('hidden');
-  resultsArea.classList.add('hidden');
-  loadingArea.classList.remove('hidden');
-  progressBar.style.width = '0%';
-  analyzeCount++;
-
-  let msgIndex = 0;
-  let progress = 0;
-
-  const msgInterval = setInterval(() => {
-    if (msgIndex < loadingMessages.length) {
-      loadingStatus.textContent = loadingMessages[msgIndex++];
-    }
-  }, 360);
-
-  const progressInterval = setInterval(() => {
-    progress += Math.random() * 3.5 + 1;
-    if (progress >= 100) {
-      progress = 100;
-      clearInterval(progressInterval);
-      clearInterval(msgInterval);
-      progressBar.style.width = '100%';
-      setTimeout(showResults, 350);
-    }
-    progressBar.style.width = progress + '%';
-  }, 80);
-}
-
-function showResults() {
-  const loadingArea = document.getElementById('loadingArea');
-  const resultsArea = document.getElementById('resultsArea');
-  const resultCard = document.querySelector('.result-card');
-
-  loadingArea.classList.add('hidden');
-  resultsArea.classList.remove('hidden');
-
-  const isGlitch = analyzeCount % 5 === 0;
-  const result = isGlitch
-    ? glitchResult
-    : resultSets[Math.floor(Math.random() * resultSets.length)];
-
-  document.getElementById('res-suck').textContent    = result.suck;
-  document.getElementById('res-brain').textContent   = result.brain;
-  document.getElementById('res-loyalty').textContent = result.loyalty;
-  document.getElementById('res-dnd').textContent     = result.dnd;
-  document.getElementById('res-vibe').textContent    = result.vibe;
-  document.getElementById('res-verdict').textContent = result.verdict;
-
-  if (isGlitch) {
-    resultCard.classList.add('glitching');
-    playAudio(clips[11]); // "i will shit on this table"
-    setTimeout(() => resultCard.classList.remove('glitching'), 500);
-  }
-
-  document.getElementById('analyzeAgainBtn').onclick = () => {
-    resultsArea.classList.add('hidden');
-    document.getElementById('analyzeBtn').classList.remove('hidden');
-  };
-}
-
-document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
-
-// === SOUNDBOARD ===
-const clips = [
-  { label: 'This girl is coming on to me',      file: 'Nuty  this girl is coming on to me.wav' },
-  { label: '3 inch dick — on the char sheet',   file: 'Nutty- And a 3 inch dick_is that on your char sheet_its going to be now.wav' },
-  { label: 'Shoving bread in the hole',          file: 'Nutty Molly - I start shoving bread in his bleading hole... ew.wav' },
-  { label: 'The Disappointment Shake',           file: 'Nutty Jake - I shake my head at jake in dissapointment.wav' },
-  { label: 'You got that recorded, Pat?',        file: 'Nutty - woah yoiu got that recorded right pat.wav' },
-  { label: 'Just wanted a blanket',              file: 'Nutty - thats alot of hate i just wanted a blanket.wav' },
-  { label: 'Sneaky Bite',                        file: 'Nutty - sneaky bite.wav' },
-  { label: 'I hate mages',                       file: 'nutty - ohh i hate mages.wav' },
-  { label: 'Useless in a fight',                 file: 'Nutty - man these mfrers are useless in a fight.wav' },
-  { label: 'Hot iron at the horse',              file: 'Nutty - ima take that hot iron and ima throw it at the horse.wav' },
-  { label: "I'm Nutty, Paladin Named Jake",      file: 'Nutty - Im nutty im playing a paladin named jake.wav' },
-  { label: 'I will shit on this table',          file: 'Nutty - if you want me to ill shit on this table.wav' },
-  { label: 'Shove these up your ass',            file: 'Nutty - I think your just gonna have to shove these up your ass.wav' },
-  { label: 'I pee on him',                       file: 'Nutty - i pee on him.wav' },
-  { label: 'Checking for traps',                 file: 'nutty - checking my door for traps.wav' },
-  { label: 'Can you read Dwarven?',              file: 'Nutty - can you read dwarven uhh what .wav' },
-  { label: '3.5 inch dick (upgrade)',            file: 'Nutty - can i get that 3.5 inch dick.wav' },
-  { label: 'And a 3 inch dick',                  file: 'Nutty - and a 3 inch dick.wav' },
-  { label: '??? RARE DROP ???', rare: true,      file: 'Jake Pat Nut - Nutty shitting on a plate (fulll).wav' },
-];
-
-const chaosClip = { file: 'Jake Nuty - Chaos Chaos we live by chaos.wav' };
-
-let totalClicks = 0;
-let lastThree = [];
-
-// Combo: "i pee on him" (13) → "shoving bread" (2) → "shit on table" (11)
-const COMBO = [13, 2, 11];
-
+let mediaFiles = [];
+let targets = [];
+let score = 0;
+let killStreak = 0;
+let lastKillTime = 0;
 let currentAudio = null;
 
-function playAudio(clip) {
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio.currentTime = 0;
+const gameArea    = document.getElementById('gameArea');
+const scoreVal    = document.getElementById('scoreVal');
+const loadingScreen = document.getElementById('loadingScreen');
+const loadingText = document.getElementById('loadingText');
+const streakDisp  = document.getElementById('streak-display');
+
+fetch('media/manifest.json')
+  .then(r => {
+    if (!r.ok) throw new Error('manifest missing');
+    return r.json();
+  })
+  .then(files => {
+    mediaFiles = files;
+    loadingScreen.classList.add('gone');
+    for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
+    requestAnimationFrame(gameLoop);
+  })
+  .catch(() => {
+    loadingText.textContent = 'Add files to media/ and run build-manifest.py';
+    loadingText.style.animationName = 'none';
+    loadingText.style.opacity = '1';
+    loadingText.style.color = '#ff006e';
+  });
+
+function spawnTarget() {
+  if (!mediaFiles.length) return;
+
+  const file = mediaFiles[Math.floor(Math.random() * mediaFiles.length)];
+  const ext  = file.split('.').pop().toLowerCase();
+  const isVideo = ext === 'mp4' || ext === 'webm' || ext === 'mov';
+
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  const w = 130 + Math.random() * 120;
+  const h = w * (0.65 + Math.random() * 0.55);
+
+  const x = Math.random() * Math.max(1, W - w);
+  const y = Math.random() * Math.max(1, H - h);
+
+  const speed = MIN_SPEED + Math.random() * (MAX_SPEED - MIN_SPEED);
+  const angle = Math.random() * Math.PI * 2;
+  const dx = Math.cos(angle) * speed;
+  const dy = Math.sin(angle) * speed;
+
+  const rot      = -18 + Math.random() * 36;
+  const rotSpeed = -0.25 + Math.random() * 0.5;
+
+  const el = document.createElement('div');
+  el.className = 'target';
+  el.style.cssText = `width:${w}px;height:${h}px;left:${x}px;top:${y}px;--rot:${rot}deg;transform:rotate(${rot}deg)`;
+
+  if (isVideo) {
+    const vid = document.createElement('video');
+    vid.autoplay = true;
+    vid.muted    = true;
+    vid.loop     = true;
+    vid.playsInline = true;
+    vid.src = MEDIA_DIR + encodeURIComponent(file);
+    el.appendChild(vid);
+  } else {
+    const img = document.createElement('img');
+    img.src = MEDIA_DIR + encodeURIComponent(file);
+    img.alt = '';
+    img.loading = 'lazy';
+    el.appendChild(img);
   }
-  const audio = new Audio('audio/' + encodeURIComponent(clip.file));
-  audio.play().catch(() => {});
-  currentAudio = audio;
-  return audio;
-}
 
-function trackClick(index) {
-  totalClicks++;
-  lastThree.push(index);
-  if (lastThree.length > 3) lastThree.shift();
+  const target = { el, x, y, dx, dy, w, h, rot, rotSpeed, dead: false };
+  targets.push(target);
+  gameArea.appendChild(el);
 
-  if (totalClicks === 10) revealSecretButton();
-
-  if (
-    lastThree.length === 3 &&
-    lastThree[0] === COMBO[0] &&
-    lastThree[1] === COMBO[1] &&
-    lastThree[2] === COMBO[2]
-  ) {
-    triggerCombo();
-  }
-}
-
-function buildSoundboard() {
-  const grid = document.getElementById('soundGrid');
-
-  clips.forEach((clip, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'sound-btn' + (clip.rare ? ' rare' : '');
-    btn.textContent = clip.label;
-
-    if (clip.rare) {
-      btn.addEventListener('click', () => {
-        totalClicks++;
-        if (totalClicks >= 10) revealSecretButton();
-
-        if (Math.random() < 0.15) {
-          btn.textContent = 'Shitting on a Plate (Full)';
-          btn.classList.remove('rare');
-          btn.classList.add('playing');
-          setTimeout(() => btn.classList.remove('playing'), 500);
-          playAudio(clip);
-          lastThree.push(i);
-          if (lastThree.length > 3) lastThree.shift();
-        } else {
-          const orig = btn.textContent;
-          btn.textContent = 'nope…';
-          setTimeout(() => { if (btn.classList.contains('rare')) btn.textContent = '??? RARE DROP ???'; }, 1200);
-        }
-      });
-    } else {
-      btn.addEventListener('click', () => {
-        btn.classList.add('playing');
-        setTimeout(() => btn.classList.remove('playing'), 400);
-        playAudio(clip);
-        trackClick(i);
-      });
-    }
-
-    grid.appendChild(btn);
+  el.addEventListener('click', (e) => {
+    e.stopPropagation();
+    shootTarget(target);
   });
 }
 
-function revealSecretButton() {
-  const wrap = document.getElementById('secretBtn');
-  if (!wrap.classList.contains('hidden')) return;
-  wrap.classList.remove('hidden');
-  triggerChaosOverlay();
+function shootTarget(target) {
+  if (target.dead) return;
+  target.dead = true;
 
-  document.getElementById('chaosBtn').addEventListener('click', () => {
-    const btn = document.getElementById('chaosBtn');
-    btn.classList.add('playing');
-    setTimeout(() => btn.classList.remove('playing'), 500);
-    playAudio(chaosClip);
-    triggerChaosOverlay();
-    totalClicks++;
-  });
+  targets.splice(targets.indexOf(target), 1);
+
+  score++;
+  scoreVal.textContent = score;
+
+  const now = Date.now();
+  killStreak = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
+  lastKillTime = now;
+
+  if (killStreak >= 3) showStreakPopup(killStreak);
+
+  // Screen flash
+  const flash = document.createElement('div');
+  flash.className = 'kill-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 220);
+
+  // Audio
+  playRandomClip();
+
+  // Explode + remove
+  target.el.classList.add('exploding');
+  setTimeout(() => {
+    target.el.remove();
+    setTimeout(spawnTarget, 200 + Math.random() * 600);
+  }, 450);
 }
 
-function triggerCombo() {
-  const display = document.getElementById('comboDisplay');
-  display.textContent = '🔥 CHAOS COMBO UNLOCKED — the unholy trinity has been achieved. 🔥';
-  display.classList.remove('hidden');
-  playAudio(chaosClip);
-  triggerChaosOverlay();
-  setTimeout(() => display.classList.add('hidden'), 5000);
+function gameLoop() {
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+
+  for (const t of targets) {
+    if (t.dead) continue;
+
+    t.x   += t.dx;
+    t.y   += t.dy;
+    t.rot += t.rotSpeed;
+
+    if (t.x <= 0)       { t.dx =  Math.abs(t.dx); t.x = 0; }
+    if (t.x + t.w >= W) { t.dx = -Math.abs(t.dx); t.x = W - t.w; }
+    if (t.y <= 0)       { t.dy =  Math.abs(t.dy); t.y = 0; }
+    if (t.y + t.h >= H) { t.dy = -Math.abs(t.dy); t.y = H - t.h; }
+
+    t.el.style.left      = t.x + 'px';
+    t.el.style.top       = t.y + 'px';
+    t.el.style.transform = `rotate(${t.rot}deg)`;
+    t.el.style.setProperty('--rot', t.rot + 'deg');
+  }
+
+  requestAnimationFrame(gameLoop);
 }
 
-function triggerChaosOverlay() {
-  const overlay = document.getElementById('chaosOverlay');
-  overlay.classList.remove('hidden');
-  // force reflow so animation replays
-  void overlay.offsetWidth;
-  setTimeout(() => overlay.classList.add('hidden'), 520);
+function playRandomClip() {
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; }
+  const file = audioFiles[Math.floor(Math.random() * audioFiles.length)];
+  const a = new Audio(AUDIO_DIR + encodeURIComponent(file));
+  a.play().catch(() => {});
+  currentAudio = a;
 }
 
-buildSoundboard();
+function showStreakPopup(count) {
+  const msg = streakMessages[Math.min(count, 7)] || `🌀 ${count}x CHAOS`;
+
+  // Update streak display in HUD
+  streakDisp.textContent = msg;
+  streakDisp.classList.add('visible');
+  clearTimeout(streakDisp._timer);
+  streakDisp._timer = setTimeout(() => streakDisp.classList.remove('visible'), 2000);
+
+  // Big center popup
+  const el = document.createElement('div');
+  el.className = 'streak-popup';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 1700);
+}
