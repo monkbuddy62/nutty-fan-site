@@ -1,11 +1,12 @@
 const AUDIO_DIR   = 'audio/';
 const MEDIA_DIR   = 'media/';
-const MAX_ON_SCREEN = 12;
+const IS_MOBILE   = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+const MAX_ON_SCREEN = IS_MOBILE ? 7 : 12;
 const BASE_SPEED  = 0.55;
 const MAX_SPEED   = 7;
 const FLEE_RADIUS = 230;
 const FLEE_FORCE  = 4.5;
-const DAMPING     = 0.97;
+const DAMPING     = IS_MOBILE ? 0.975 : 0.97; // slightly more drag on mobile
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -288,6 +289,92 @@ function triggerExplosion(target) {
   }, 450);
 }
 
+// === MOBILE: TILT + SHAKE ===
+let gravityX    = 0;
+let gravityY    = 0;
+let lastShake   = 0;
+let motionReady = false;
+
+function handleOrientation(e) {
+  // gamma: left/right tilt (-90 to 90)
+  // beta: ~90 when held vertical; increases tilting top toward you
+  gravityX = (e.gamma || 0) * 0.005;
+  gravityY = ((e.beta  || 0) - 90) * 0.003;
+}
+
+let prevAccel = null;
+function handleMotion(e) {
+  const acc = e.accelerationIncludingGravity;
+  if (!acc) return;
+  if (prevAccel) {
+    const delta = Math.abs(acc.x - prevAccel.x)
+                + Math.abs(acc.y - prevAccel.y)
+                + Math.abs(acc.z - prevAccel.z);
+    if (delta > 28 && Date.now() - lastShake > 1200) {
+      lastShake = Date.now();
+      scatterAll();
+    }
+  }
+  prevAccel = { x: acc.x, y: acc.y, z: acc.z };
+}
+
+function scatterAll() {
+  targets.forEach(t => {
+    if (t.dead) return;
+    const angle = Math.random() * Math.PI * 2;
+    const spd   = 3 + Math.random() * 4;
+    t.dx = Math.cos(angle) * spd;
+    t.dy = Math.sin(angle) * spd;
+  });
+  playNuttyClip();
+  const flash = document.createElement('div');
+  flash.className = 'kill-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 220);
+}
+
+function setupMotionListeners() {
+  window.addEventListener('deviceorientation', handleOrientation);
+  window.addEventListener('devicemotion', handleMotion);
+  motionReady = true;
+  const tip = document.getElementById('tiltTip');
+  if (tip) tip.remove();
+}
+
+// Show a tilt tip on mobile
+if (IS_MOBILE) {
+  const tip = document.createElement('div');
+  tip.id = 'tiltTip';
+  tip.textContent = '📱 tilt to herd · shake to scatter';
+  Object.assign(tip.style, {
+    position: 'fixed', bottom: '2rem', left: '50%',
+    transform: 'translateX(-50%)',
+    fontFamily: "'Courier New', monospace",
+    fontSize: '0.75rem', color: 'rgba(200,170,255,0.55)',
+    pointerEvents: 'none', zIndex: '100',
+    whiteSpace: 'nowrap',
+    animation: 'blink 2s infinite',
+  });
+  document.body.appendChild(tip);
+  setTimeout(() => { if (tip.parentNode) tip.remove(); }, 6000);
+
+  // Request permission on first tap (required for iOS 13+)
+  const requestOnTap = async () => {
+    if (motionReady) return;
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        const res = await DeviceOrientationEvent.requestPermission();
+        if (res === 'granted') setupMotionListeners();
+      } catch(e) {}
+    } else {
+      setupMotionListeners();
+    }
+    document.removeEventListener('touchstart', requestOnTap);
+  };
+  document.addEventListener('touchstart', requestOnTap, { once: true });
+}
+
 // === WARP STARFIELD ===
 const canvas = document.getElementById('stars');
 const sctx   = canvas.getContext('2d');
@@ -504,6 +591,10 @@ function loop() {
       t.dx -= (fx / dist) * force;
       t.dy -= (fy / dist) * force;
     }
+
+    // Apply tilt gravity on mobile
+    t.dx += gravityX;
+    t.dy += gravityY;
 
     t.dx *= DAMPING;
     t.dy *= DAMPING;
