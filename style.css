@@ -130,6 +130,16 @@ body::after {
   pointer-events: none;
 }
 
+/* Hit shake */
+@keyframes hitShake {
+  0%   { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); }
+  20%  { transform: translate(calc(var(--tx) - 6px), var(--ty)) rotate(var(--rot)); }
+  40%  { transform: translate(calc(var(--tx) + 6px), var(--ty)) rotate(var(--rot)); }
+  60%  { transform: translate(calc(var(--tx) - 4px), var(--ty)) rotate(var(--rot)); }
+  80%  { transform: translate(calc(var(--tx) + 4px), var(--ty)) rotate(var(--rot)); }
+  100% { transform: translate(var(--tx), var(--ty)) rotate(var(--rot)); }
+}
+
 /* Dim overlay behind the spotlit photo */
 .kill-overlay {
   position: fixed;

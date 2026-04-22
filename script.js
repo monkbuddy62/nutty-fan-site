@@ -289,90 +289,207 @@ function triggerExplosion(target) {
   }, 450);
 }
 
-// === MOBILE: TILT + SHAKE ===
-let gravityX    = 0;
-let gravityY    = 0;
-let lastShake   = 0;
-let motionReady = false;
+// === DAMAGE SYSTEM ===
+const MAX_HP = 3;
 
-function handleOrientation(e) {
-  // gamma: left/right tilt (-90 to 90)
-  // beta: ~90 when held vertical; increases tilting top toward you
-  gravityX = (e.gamma || 0) * 0.005;
-  gravityY = ((e.beta  || 0) - 90) * 0.003;
-}
-
-let prevAccel = null;
-function handleMotion(e) {
-  const acc = e.accelerationIncludingGravity;
-  if (!acc) return;
-  if (prevAccel) {
-    const delta = Math.abs(acc.x - prevAccel.x)
-                + Math.abs(acc.y - prevAccel.y)
-                + Math.abs(acc.z - prevAccel.z);
-    if (delta > 28 && Date.now() - lastShake > 1200) {
-      lastShake = Date.now();
-      scatterAll();
-    }
+function damageTarget(target, amount) {
+  if (target.dead || target.shooting) return;
+  target.hp = (target.hp || MAX_HP) - amount;
+  if (target.hp <= 0) {
+    shootTarget(target);
+    return;
   }
-  prevAccel = { x: acc.x, y: acc.y, z: acc.z };
+  // Visual hit feedback
+  const frac = target.hp / MAX_HP;
+  if (frac < 0.67) {
+    target.el.style.boxShadow = '0 0 0 3px rgba(255,100,50,0.9), 0 0 18px rgba(255,60,0,0.5)';
+  }
+  if (frac < 0.34) {
+    target.el.style.boxShadow = '0 0 0 5px rgba(255,0,0,1), 0 0 30px rgba(255,0,0,0.8)';
+    target.el.style.filter    = 'saturate(0.3) contrast(1.4)';
+  }
+  // Shake
+  target.el.style.setProperty('--tx', target.x + 'px');
+  target.el.style.setProperty('--ty', target.y + 'px');
+  target.el.style.animation = 'hitShake 0.28s ease';
+  setTimeout(() => { if (!target.dead) target.el.style.animation = ''; }, 300);
 }
 
-function scatterAll() {
+// === SHOCKWAVE ===
+function triggerShockwave(cx, cy) {
+  // Visual ring
+  const ring = document.createElement('div');
+  Object.assign(ring.style, {
+    position: 'fixed', left: cx + 'px', top: cy + 'px',
+    width: '30px', height: '30px', borderRadius: '50%',
+    border: '3px solid rgba(200,150,255,0.85)',
+    boxShadow: '0 0 12px rgba(200,150,255,0.5)',
+    transform: 'translate(-50%,-50%) scale(1)',
+    pointerEvents: 'none', zIndex: '200',
+    transition: 'transform 0.55s ease-out, opacity 0.55s ease-out',
+    opacity: '1',
+  });
+  document.body.appendChild(ring);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ring.style.transform = 'translate(-50%,-50%) scale(18)';
+    ring.style.opacity   = '0';
+  }));
+  setTimeout(() => ring.remove(), 600);
+
+  // Push + damage targets in radius
+  const RADIUS = window.innerWidth * 0.45;
   targets.forEach(t => {
     if (t.dead) return;
-    const angle = Math.random() * Math.PI * 2;
-    const spd   = 3 + Math.random() * 4;
-    t.dx = Math.cos(angle) * spd;
-    t.dy = Math.sin(angle) * spd;
+    const dx = (t.x + t.w/2) - cx;
+    const dy = (t.y + t.h/2) - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist < RADIUS && dist > 0) {
+      const force = (1 - dist/RADIUS) * 9;
+      t.dx += (dx/dist) * force;
+      t.dy += (dy/dist) * force;
+      damageTarget(t, 1);
+    }
   });
-  playNuttyClip();
-  const flash = document.createElement('div');
-  flash.className = 'kill-flash';
-  document.body.appendChild(flash);
-  setTimeout(() => flash.remove(), 220);
+  playBoom();
 }
 
-function setupMotionListeners() {
-  window.addEventListener('deviceorientation', handleOrientation);
-  window.addEventListener('devicemotion', handleMotion);
-  motionReady = true;
-  const tip = document.getElementById('tiltTip');
-  if (tip) tip.remove();
+// === FLICK BLAST ===
+function triggerFlick(cx, cy, nx, ny, power) {
+  // Visual streak
+  const streak = document.createElement('div');
+  const angle  = Math.atan2(ny, nx) * 180 / Math.PI;
+  Object.assign(streak.style, {
+    position: 'fixed', left: cx + 'px', top: cy + 'px',
+    width: '120px', height: '4px',
+    background: 'linear-gradient(to right, rgba(255,200,100,0.9), transparent)',
+    borderRadius: '2px',
+    transform: `translate(-10px,-2px) rotate(${angle}deg)`,
+    transformOrigin: '0 50%',
+    pointerEvents: 'none', zIndex: '200',
+    transition: 'opacity 0.3s',
+    opacity: '1',
+  });
+  document.body.appendChild(streak);
+  requestAnimationFrame(() => requestAnimationFrame(() => { streak.style.opacity = '0'; }));
+  setTimeout(() => streak.remove(), 350);
+
+  // Push + damage targets in the flick direction
+  const CONE   = 0.7; // cos of max angle (≈45°)
+  const RADIUS = 350;
+  targets.forEach(t => {
+    if (t.dead) return;
+    const dx   = (t.x + t.w/2) - cx;
+    const dy   = (t.y + t.h/2) - cy;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if (dist > RADIUS || dist === 0) return;
+    const dot = (dx/dist)*nx + (dy/dist)*ny;
+    if (dot < CONE) return; // outside cone
+    const force = dot * power * 5;
+    t.dx += nx * force;
+    t.dy += ny * force;
+    damageTarget(t, 1);
+  });
 }
 
-// Show a tilt tip on mobile
+// === MOBILE TOUCH CONTROLS ===
 if (IS_MOBILE) {
+  let tapTime = 0, tapX = 0, tapY = 0;
+  let pressTimer = null, pressActive = false, pressEl = null;
+  let swipeStartX = 0, swipeStartY = 0, swipeStartT = 0;
+  let swipeCurX = 0, swipeCurY = 0;
+
+  // Show hint
   const tip = document.createElement('div');
-  tip.id = 'tiltTip';
-  tip.textContent = '📱 tilt to herd · shake to scatter';
+  tip.textContent = 'tap · double-tap · swipe · hold';
   Object.assign(tip.style, {
     position: 'fixed', bottom: '2rem', left: '50%',
     transform: 'translateX(-50%)',
     fontFamily: "'Courier New', monospace",
-    fontSize: '0.75rem', color: 'rgba(200,170,255,0.55)',
+    fontSize: '0.7rem', color: 'rgba(200,170,255,0.5)',
     pointerEvents: 'none', zIndex: '100',
-    whiteSpace: 'nowrap',
-    animation: 'blink 2s infinite',
+    whiteSpace: 'nowrap', animation: 'blink 2s infinite',
   });
   document.body.appendChild(tip);
-  setTimeout(() => { if (tip.parentNode) tip.remove(); }, 6000);
+  setTimeout(() => tip.remove(), 5000);
 
-  // Request permission on first tap (required for iOS 13+)
-  const requestOnTap = async () => {
-    if (motionReady) return;
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        const res = await DeviceOrientationEvent.requestPermission();
-        if (res === 'granted') setupMotionListeners();
-      } catch(e) {}
-    } else {
-      setupMotionListeners();
+  function endPress() {
+    clearTimeout(pressTimer);
+    if (pressActive) {
+      pressActive = false;
+      mouseX = -9999; mouseY = -9999;
+      if (pressEl) { pressEl.style.opacity = '0'; setTimeout(() => pressEl && pressEl.remove(), 300); pressEl = null; }
     }
-    document.removeEventListener('touchstart', requestOnTap);
-  };
-  document.addEventListener('touchstart', requestOnTap, { once: true });
+  }
+
+  document.addEventListener('touchstart', e => {
+    const t0 = e.touches[0];
+    swipeStartX = swipeCurX = t0.clientX;
+    swipeStartY = swipeCurY = t0.clientY;
+    swipeStartT = Date.now();
+
+    // Double-tap detection (empty space only)
+    if (!e.target.closest('.target')) {
+      const now = Date.now();
+      if (now - tapTime < 300 && Math.hypot(t0.clientX - tapX, t0.clientY - tapY) < 40) {
+        triggerShockwave(t0.clientX, t0.clientY);
+        tapTime = 0;
+        return;
+      }
+      tapTime = now; tapX = t0.clientX; tapY = t0.clientY;
+    }
+
+    // Long press on empty space
+    if (!e.target.closest('.target')) {
+      pressTimer = setTimeout(() => {
+        pressActive = true;
+        mouseX = swipeStartX; mouseY = swipeStartY;
+
+        pressEl = document.createElement('div');
+        Object.assign(pressEl.style, {
+          position: 'fixed', left: swipeStartX + 'px', top: swipeStartY + 'px',
+          width: '60px', height: '60px', borderRadius: '50%',
+          border: '2px solid rgba(200,150,255,0.5)',
+          background: 'rgba(200,150,255,0.07)',
+          transform: 'translate(-50%,-50%) scale(1)',
+          pointerEvents: 'none', zIndex: '200',
+          transition: 'transform 1.8s ease-out, opacity 0.3s',
+        });
+        document.body.appendChild(pressEl);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          pressEl.style.transform = 'translate(-50%,-50%) scale(4)';
+        }));
+      }, 380);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    const t0 = e.touches[0];
+    swipeCurX = t0.clientX;
+    swipeCurY = t0.clientY;
+    mouseX = t0.clientX;
+    mouseY = t0.clientY;
+    if (pressActive) { mouseX = t0.clientX; mouseY = t0.clientY; }
+    // Movement cancels long press
+    if (Math.hypot(t0.clientX - swipeStartX, t0.clientY - swipeStartY) > 12) {
+      clearTimeout(pressTimer);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    mouseX = -9999; mouseY = -9999;
+    if (pressActive) { endPress(); return; }
+    clearTimeout(pressTimer);
+
+    const dt   = Date.now() - swipeStartT;
+    const ddx  = swipeCurX - swipeStartX;
+    const ddy  = swipeCurY - swipeStartY;
+    const dist = Math.hypot(ddx, ddy);
+    const vel  = dist / Math.max(dt, 1);
+
+    if (vel > 0.6 && dist > 40 && dt < 400) {
+      triggerFlick(swipeStartX, swipeStartY, ddx/dist, ddy/dist, Math.min(vel, 2));
+    }
+  }, { passive: true });
 }
 
 // === WARP STARFIELD ===
@@ -487,6 +604,7 @@ function spawnTarget() {
     dy: Math.sin(angle) * spd,
     w, h: w,
     rot, rotSpeed, dead: false,
+    hp: MAX_HP, maxHp: MAX_HP,
   };
 
   if (isVideo) {
@@ -513,12 +631,14 @@ function spawnTarget() {
 
   targets.push(target);
   gameArea.appendChild(el);
-  el.addEventListener('click', e => { e.stopPropagation(); shootTarget(target); });
+  // Desktop = instant kill (3 dmg), mobile = 1 damage per tap
+  el.addEventListener('click', e => { e.stopPropagation(); damageTarget(target, IS_MOBILE ? 1 : MAX_HP); });
 }
 
 // === SHOOT — fly to center, hold, then explode ===
 function shootTarget(target) {
-  if (target.dead) return;
+  if (target.dead || target.shooting) return;
+  target.shooting = true;
   target.dead = true;
   targets.splice(targets.indexOf(target), 1);
 
