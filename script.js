@@ -1,12 +1,11 @@
 const AUDIO_DIR   = 'audio/';
 const MEDIA_DIR   = 'media/';
-const IS_MOBILE   = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
-const MAX_ON_SCREEN = IS_MOBILE ? 7 : 12;
+const MAX_ON_SCREEN = 12;
 const BASE_SPEED  = 0.55;
 const MAX_SPEED   = 7;
 const FLEE_RADIUS = 230;
 const FLEE_FORCE  = 4.5;
-const DAMPING     = IS_MOBILE ? 0.975 : 0.97; // slightly more drag on mobile
+const DAMPING     = 0.97;
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -289,287 +288,6 @@ function triggerExplosion(target) {
   }, 450);
 }
 
-// === DAMAGE SYSTEM ===
-const MAX_HP = 3;
-
-function damageTarget(target, amount) {
-  if (target.dead || target.shooting) return;
-  const now = Date.now();
-  if (now - (target._lastDmg || 0) < 300) return;
-  target._lastDmg = now;
-  target.hp = (target.hp || MAX_HP) - amount;
-  if (target.hp <= 0) {
-    shootTarget(target);
-    return;
-  }
-  // Visual hit feedback
-  const frac = target.hp / MAX_HP;
-  if (frac < 0.67) {
-    target.el.style.boxShadow = '0 0 0 3px rgba(255,100,50,0.9), 0 0 18px rgba(255,60,0,0.5)';
-  }
-  if (frac < 0.34) {
-    target.el.style.boxShadow = '0 0 0 5px rgba(255,0,0,1), 0 0 30px rgba(255,0,0,0.8)';
-    target.el.style.filter    = 'saturate(0.3) contrast(1.4)';
-  }
-  // Shake
-  target.el.style.setProperty('--tx', target.x + 'px');
-  target.el.style.setProperty('--ty', target.y + 'px');
-  target.el.style.animation = 'hitShake 0.28s ease';
-  setTimeout(() => { if (!target.dead) target.el.style.animation = ''; }, 300);
-}
-
-// === SHOCKWAVE ===
-function triggerShockwave(cx, cy) {
-  // Visual ring
-  const ring = document.createElement('div');
-  Object.assign(ring.style, {
-    position: 'fixed', left: cx + 'px', top: cy + 'px',
-    width: '30px', height: '30px', borderRadius: '50%',
-    border: '3px solid rgba(200,150,255,0.85)',
-    boxShadow: '0 0 12px rgba(200,150,255,0.5)',
-    transform: 'translate(-50%,-50%) scale(1)',
-    pointerEvents: 'none', zIndex: '200',
-    transition: 'transform 0.55s ease-out, opacity 0.55s ease-out',
-    opacity: '1',
-  });
-  document.body.appendChild(ring);
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    ring.style.transform = 'translate(-50%,-50%) scale(18)';
-    ring.style.opacity   = '0';
-  }));
-  setTimeout(() => ring.remove(), 600);
-
-  // Push + damage targets in radius
-  const RADIUS = window.innerWidth * 0.45;
-  targets.forEach(t => {
-    if (t.dead) return;
-    const dx = (t.x + t.w/2) - cx;
-    const dy = (t.y + t.h/2) - cy;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist < RADIUS && dist > 0) {
-      const force = (1 - dist/RADIUS) * 9;
-      t.dx += (dx/dist) * force;
-      t.dy += (dy/dist) * force;
-      damageTarget(t, 1);
-    }
-  });
-  playBoom();
-}
-
-// === FLICK BLAST ===
-function triggerFlick(cx, cy, nx, ny, power) {
-  // Visual streak
-  const streak = document.createElement('div');
-  const angle  = Math.atan2(ny, nx) * 180 / Math.PI;
-  Object.assign(streak.style, {
-    position: 'fixed', left: cx + 'px', top: cy + 'px',
-    width: '120px', height: '4px',
-    background: 'linear-gradient(to right, rgba(255,200,100,0.9), transparent)',
-    borderRadius: '2px',
-    transform: `translate(-10px,-2px) rotate(${angle}deg)`,
-    transformOrigin: '0 50%',
-    pointerEvents: 'none', zIndex: '200',
-    transition: 'opacity 0.3s',
-    opacity: '1',
-  });
-  document.body.appendChild(streak);
-  requestAnimationFrame(() => requestAnimationFrame(() => { streak.style.opacity = '0'; }));
-  setTimeout(() => streak.remove(), 350);
-
-  // Push + damage targets in the flick direction
-  const CONE   = 0.7; // cos of max angle (≈45°)
-  const RADIUS = 350;
-  targets.forEach(t => {
-    if (t.dead) return;
-    const dx   = (t.x + t.w/2) - cx;
-    const dy   = (t.y + t.h/2) - cy;
-    const dist = Math.sqrt(dx*dx + dy*dy);
-    if (dist > RADIUS || dist === 0) return;
-    const dot = (dx/dist)*nx + (dy/dist)*ny;
-    if (dot < CONE) return; // outside cone
-    const force = dot * power * 5;
-    t.dx += nx * force;
-    t.dy += ny * force;
-    damageTarget(t, 1);
-  });
-}
-
-// === MOBILE TOUCH CONTROLS ===
-if (IS_MOBILE) {
-  let tapTime = 0, tapX = 0, tapY = 0;
-  let pressTimer = null, pressActive = false, pressEl = null;
-  let swipeStartX = 0, swipeStartY = 0, swipeStartT = 0;
-  let swipeCurX = 0, swipeCurY = 0;
-
-  // Show hint
-  const tip = document.createElement('div');
-  tip.textContent = 'tap · double-tap · swipe · hold';
-  Object.assign(tip.style, {
-    position: 'fixed', bottom: '2rem', left: '50%',
-    transform: 'translateX(-50%)',
-    fontFamily: "'Courier New', monospace",
-    fontSize: '0.7rem', color: 'rgba(200,170,255,0.5)',
-    pointerEvents: 'none', zIndex: '100',
-    whiteSpace: 'nowrap', animation: 'blink 2s infinite',
-  });
-  document.body.appendChild(tip);
-  setTimeout(() => tip.remove(), 5000);
-
-  function endPress() {
-    clearTimeout(pressTimer);
-    if (pressActive) {
-      pressActive = false;
-      mouseX = -9999; mouseY = -9999;
-      if (pressEl) { pressEl.style.opacity = '0'; setTimeout(() => pressEl && pressEl.remove(), 300); pressEl = null; }
-    }
-  }
-
-  document.addEventListener('touchstart', e => {
-    const t0 = e.touches[0];
-    swipeStartX = swipeCurX = t0.clientX;
-    swipeStartY = swipeCurY = t0.clientY;
-    swipeStartT = Date.now();
-
-    // Double-tap detection (empty space only)
-    if (!e.target.closest('.target')) {
-      const now = Date.now();
-      if (now - tapTime < 300 && Math.hypot(t0.clientX - tapX, t0.clientY - tapY) < 40) {
-        triggerShockwave(t0.clientX, t0.clientY);
-        tapTime = 0;
-        return;
-      }
-      tapTime = now; tapX = t0.clientX; tapY = t0.clientY;
-    }
-
-    // Long press on empty space
-    if (!e.target.closest('.target')) {
-      pressTimer = setTimeout(() => {
-        pressActive = true;
-        mouseX = swipeStartX; mouseY = swipeStartY;
-
-        pressEl = document.createElement('div');
-        Object.assign(pressEl.style, {
-          position: 'fixed', left: swipeStartX + 'px', top: swipeStartY + 'px',
-          width: '60px', height: '60px', borderRadius: '50%',
-          border: '2px solid rgba(200,150,255,0.5)',
-          background: 'rgba(200,150,255,0.07)',
-          transform: 'translate(-50%,-50%) scale(1)',
-          pointerEvents: 'none', zIndex: '200',
-          transition: 'transform 1.8s ease-out, opacity 0.3s',
-        });
-        document.body.appendChild(pressEl);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          pressEl.style.transform = 'translate(-50%,-50%) scale(4)';
-        }));
-      }, 380);
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchmove', e => {
-    const t0 = e.touches[0];
-    swipeCurX = t0.clientX;
-    swipeCurY = t0.clientY;
-    if (pressActive) { mouseX = t0.clientX; mouseY = t0.clientY; }
-    // Movement cancels long press
-    if (Math.hypot(t0.clientX - swipeStartX, t0.clientY - swipeStartY) > 12) {
-      clearTimeout(pressTimer);
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchend', e => {
-    mouseX = -9999; mouseY = -9999;
-    if (pressActive) { endPress(); return; }
-    clearTimeout(pressTimer);
-
-    const dt   = Date.now() - swipeStartT;
-    const ddx  = swipeCurX - swipeStartX;
-    const ddy  = swipeCurY - swipeStartY;
-    const dist = Math.hypot(ddx, ddy);
-    const vel  = dist / Math.max(dt, 1);
-
-    if (vel > 0.6 && dist > 40 && dt < 400) {
-      triggerFlick(swipeStartX, swipeStartY, ddx/dist, ddy/dist, Math.min(vel, 2));
-    }
-  }, { passive: true });
-}
-
-// === DESKTOP MOUSE CONTROLS ===
-if (!IS_MOBILE) {
-  let mouseDown = false;
-  let pressTimer = null, pressActive = false, pressEl = null;
-  let dragStartX = 0, dragStartY = 0, dragStartT = 0;
-  let dragCurX = 0, dragCurY = 0;
-  let lastClickTime = 0, lastClickX = 0, lastClickY = 0;
-
-  function endMousePress() {
-    clearTimeout(pressTimer);
-    if (pressActive) {
-      pressActive = false;
-      if (pressEl) { pressEl.style.opacity = '0'; setTimeout(() => pressEl && pressEl.remove(), 300); pressEl = null; }
-    }
-  }
-
-  gameArea.addEventListener('mousedown', e => {
-    if (e.target.closest('.target')) return;
-    mouseDown = true;
-    dragStartX = dragCurX = e.clientX;
-    dragStartY = dragCurY = e.clientY;
-    dragStartT = Date.now();
-
-    // Double click → shockwave
-    const now = Date.now();
-    if (now - lastClickTime < 300 && Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 40) {
-      triggerShockwave(e.clientX, e.clientY);
-      lastClickTime = 0;
-      return;
-    }
-    lastClickTime = now; lastClickX = e.clientX; lastClickY = e.clientY;
-
-    // Long press
-    pressTimer = setTimeout(() => {
-      pressActive = true;
-      pressEl = document.createElement('div');
-      Object.assign(pressEl.style, {
-        position: 'fixed', left: dragStartX + 'px', top: dragStartY + 'px',
-        width: '60px', height: '60px', borderRadius: '50%',
-        border: '2px solid rgba(200,150,255,0.5)',
-        background: 'rgba(200,150,255,0.07)',
-        transform: 'translate(-50%,-50%) scale(1)',
-        pointerEvents: 'none', zIndex: '200',
-        transition: 'transform 1.8s ease-out, opacity 0.3s',
-      });
-      document.body.appendChild(pressEl);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        pressEl.style.transform = 'translate(-50%,-50%) scale(4)';
-      }));
-    }, 380);
-  });
-
-  window.addEventListener('mousemove', e => {
-    if (!mouseDown) return;
-    dragCurX = e.clientX;
-    dragCurY = e.clientY;
-    if (Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY) > 12) clearTimeout(pressTimer);
-  });
-
-  window.addEventListener('mouseup', e => {
-    if (!mouseDown) return;
-    mouseDown = false;
-    if (pressActive) { endMousePress(); return; }
-    endMousePress();
-
-    const dt   = Date.now() - dragStartT;
-    const ddx  = dragCurX - dragStartX;
-    const ddy  = dragCurY - dragStartY;
-    const dist = Math.hypot(ddx, ddy);
-    const vel  = dist / Math.max(dt, 1);
-
-    if (vel > 0.6 && dist > 40 && dt < 400) {
-      triggerFlick(dragStartX, dragStartY, ddx/dist, ddy/dist, Math.min(vel, 2));
-    }
-  });
-}
-
 // === WARP STARFIELD ===
 const canvas = document.getElementById('stars');
 const sctx   = canvas.getContext('2d');
@@ -682,7 +400,6 @@ function spawnTarget() {
     dy: Math.sin(angle) * spd,
     w, h: w,
     rot, rotSpeed, dead: false,
-    hp: MAX_HP, maxHp: MAX_HP,
   };
 
   if (isVideo) {
@@ -709,13 +426,12 @@ function spawnTarget() {
 
   targets.push(target);
   gameArea.appendChild(el);
-  el.addEventListener('click', e => { e.stopPropagation(); damageTarget(target, 1); });
+  el.addEventListener('click', e => { e.stopPropagation(); shootTarget(target); });
 }
 
 // === SHOOT — fly to center, hold, then explode ===
 function shootTarget(target) {
-  if (target.dead || target.shooting) return;
-  target.shooting = true;
+  if (target.dead) return;
   target.dead = true;
   targets.splice(targets.indexOf(target), 1);
 
@@ -733,15 +449,13 @@ function shootTarget(target) {
   const W  = window.innerWidth;
   const H  = window.innerHeight;
 
-  // Move element out of gameArea onto body so it shares stacking context with overlay
-  el.style.position = 'fixed';
+  // Lock element at its current floated position
   el.style.left = target.x + 'px';
   el.style.top  = target.y + 'px';
   el.style.pointerEvents = 'none';
   el.style.zIndex = '30';
-  document.body.appendChild(el);
 
-  // Dim overlay so photo stands out — z-index 25, below target's 30
+  // Dim overlay so photo stands out
   const overlay = document.createElement('div');
   overlay.className = 'kill-overlay';
   document.body.appendChild(overlay);
