@@ -152,9 +152,9 @@ document.getElementById('analyzeBtn').addEventListener('click', runAnalysis);
 
 // === SOUNDBOARD ===
 const clips = [
-  { label: 'This girl is coming on to me',      file: 'Nuty this girl is coming on to me.wav' },
+  { label: 'This girl is coming on to me',      file: 'Nuty  this girl is coming on to me.wav' },
   { label: '3 inch dick — on the char sheet',   file: 'Nutty- And a 3 inch dick_is that on your char sheet_its going to be now.wav' },
-  { label: 'Shoving bread in the hole',          file: 'Nutty Molly - I start shoving bread in his bleeding hole... ew.wav' },
+  { label: 'Shoving bread in the hole',          file: 'Nutty Molly - I start shoving bread in his bleading hole... ew.wav' },
   { label: 'The Disappointment Shake',           file: 'Nutty Jake - I shake my head at jake in dissapointment.wav' },
   { label: 'You got that recorded, Pat?',        file: 'Nutty - woah yoiu got that recorded right pat.wav' },
   { label: 'Just wanted a blanket',              file: 'Nutty - thats alot of hate i just wanted a blanket.wav' },
@@ -170,7 +170,7 @@ const clips = [
   { label: 'Can you read Dwarven?',              file: 'Nutty - can you read dwarven uhh what .wav' },
   { label: '3.5 inch dick (upgrade)',            file: 'Nutty - can i get that 3.5 inch dick.wav' },
   { label: 'And a 3 inch dick',                  file: 'Nutty - and a 3 inch dick.wav' },
-  { label: '??? RARE DROP ???', rare: true,      file: 'Jake Pat Nut - Nutty shitting on a plate (full)).wav' },
+  { label: '??? RARE DROP ???', rare: true,      file: 'Jake Pat Nut - Nutty shitting on a plate (fulll).wav' },
 ];
 
 const chaosClip = { file: 'Jake Nuty - Chaos Chaos we live by chaos.wav' };
