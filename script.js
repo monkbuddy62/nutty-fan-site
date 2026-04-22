@@ -205,13 +205,16 @@ function explodeStars(cx, cy) {
 }
 
 function explodeShatter(target) {
-  const rect = target.el.getBoundingClientRect();
+  const rect  = target.el.getBoundingClientRect();
   const imgEl = target.el.querySelector('img');
   if (!imgEl || !imgEl.src) { explodeStars(rect.left + rect.width/2, rect.top + rect.height/2); return; }
 
   const cols = 3, rows = 2;
   const pw = rect.width  / cols;
   const ph = rect.height / rows;
+  // Use actual rendered dimensions for background-size
+  const bw = rect.width;
+  const bh = rect.height;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
@@ -229,7 +232,7 @@ function explodeShatter(target) {
         left: px + 'px', top: py + 'px',
         width: pw + 'px', height: ph + 'px',
         backgroundImage: `url(${imgEl.src})`,
-        backgroundSize: `${rect.width}px ${rect.height}px`,
+        backgroundSize: `${bw}px ${bh}px`,
         backgroundPosition: `-${c * pw}px -${r * ph}px`,
         pointerEvents: 'none', zIndex: '200',
         transition: `transform ${dur}s ease-in, opacity ${dur * 0.8}s ease-in ${dur * 0.2}s`,
@@ -250,13 +253,20 @@ function explodeShatter(target) {
 const EXPLOSION_STYLES = ['dust', 'stars', 'shatter'];
 
 function triggerExplosion(target) {
-  const rect = target.el.getBoundingClientRect();
-  const cx = rect.left + rect.width  / 2;
-  const cy = rect.top  + rect.height / 2;
+  const el   = target.el;
+  const rect = el.getBoundingClientRect();
+  const cx   = rect.left + rect.width  / 2;
+  const cy   = rect.top  + rect.height / 2;
 
+  // Dismiss overlay
+  if (target._overlay) {
+    target._overlay.style.opacity = '0';
+    setTimeout(() => target._overlay.remove(), 500);
+  }
+
+  // Particles at screen center where photo is hovering
   const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
-
-  if (style === 'dust')    explodeDust(cx, cy);
+  if (style === 'dust')         explodeDust(cx, cy);
   else if (style === 'stars')   explodeStars(cx, cy);
   else if (style === 'shatter') explodeShatter(target);
 
@@ -266,13 +276,16 @@ function triggerExplosion(target) {
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 220);
 
-  // CSS collapse animation
-  target.el.classList.remove('zooming');
-  target.el.classList.add('exploding');
+  // Collapse in place (JS transition, not CSS class)
+  const finalRot = -180 + Math.random() * 360;
+  el.style.transition = 'transform 0.4s ease-in, opacity 0.35s ease-in';
+  el.style.transform  = `translate(${target._dx}px, ${target._dy}px) rotate(${finalRot}deg) scale(0.03)`;
+  el.style.opacity    = '0';
+
   setTimeout(() => {
-    target.el.remove();
+    el.remove();
     setTimeout(spawnTarget, 200 + Math.random() * 600);
-  }, 420);
+  }, 450);
 }
 
 // === WARP STARFIELD ===
@@ -416,7 +429,7 @@ function spawnTarget() {
   el.addEventListener('click', e => { e.stopPropagation(); shootTarget(target); });
 }
 
-// === SHOOT — zoom in first, then explode ===
+// === SHOOT — fly to center, hold, then explode ===
 function shootTarget(target) {
   if (target.dead) return;
   target.dead = true;
@@ -432,16 +445,43 @@ function shootTarget(target) {
 
   playPew();
 
-  // Freeze position so it stays put during zoom
-  target.el.style.left = target.x + 'px';
-  target.el.style.top  = target.y + 'px';
-  target.el.classList.add('zooming');
+  const el = target.el;
+  const W  = window.innerWidth;
+  const H  = window.innerHeight;
 
+  // Lock element at its current floated position
+  el.style.left = target.x + 'px';
+  el.style.top  = target.y + 'px';
+  el.style.pointerEvents = 'none';
+  el.style.zIndex = '30';
+
+  // Dim overlay so photo stands out
+  const overlay = document.createElement('div');
+  overlay.className = 'kill-overlay';
+  document.body.appendChild(overlay);
+  requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
+  target._overlay = overlay;
+
+  // Transform needed to move center of element to screen center, upright, big
+  const dx    = W / 2 - (target.x + target.w / 2);
+  const dy    = H / 2 - (target.y + target.h / 2);
+  const scale = Math.min(W * 0.72, H * 0.72) / target.w;
+  target._dx    = dx;
+  target._dy    = dy;
+  target._scale = scale;
+
+  // Fly to center
+  el.style.transition = 'transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(${scale})`;
+  }));
+
+  // Hold for 2.8s after fly-in (0.7s), then explode
   setTimeout(() => {
     playBoom();
     playNuttyClip();
     triggerExplosion(target);
-  }, 520);
+  }, 700 + 2800);
 }
 
 // === GAME LOOP ===
