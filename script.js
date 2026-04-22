@@ -377,7 +377,10 @@ fetch('media/manifest.json')
 function spawnTarget() {
   if (!mediaFiles.length) return;
 
-  const file    = mediaFiles[Math.floor(Math.random() * mediaFiles.length)];
+  const active  = new Set(targets.map(t => t.file));
+  const pool    = mediaFiles.filter(f => !active.has(f));
+  const src     = pool.length ? pool : mediaFiles;
+  const file    = src[Math.floor(Math.random() * src.length)];
   const ext     = file.split('.').pop().toLowerCase();
   const isVideo = ext === 'mp4' || ext === 'webm' || ext === 'mov';
 
@@ -396,7 +399,7 @@ function spawnTarget() {
   el.style.cssText = `width:${w}px;left:${x}px;top:${y}px;--rot:${rot}deg;transform:rotate(${rot}deg)`;
 
   const target = {
-    el, x, y,
+    el, x, y, file,
     dx: Math.cos(angle) * spd,
     dy: Math.sin(angle) * spd,
     w, h: w,
