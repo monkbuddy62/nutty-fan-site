@@ -449,13 +449,15 @@ function shootTarget(target) {
   const W  = window.innerWidth;
   const H  = window.innerHeight;
 
-  // Lock element at its current floated position
+  // Move element out of gameArea onto body so it shares stacking context with overlay
+  el.style.position = 'fixed';
   el.style.left = target.x + 'px';
   el.style.top  = target.y + 'px';
   el.style.pointerEvents = 'none';
   el.style.zIndex = '30';
+  document.body.appendChild(el);
 
-  // Dim overlay so photo stands out
+  // Dim overlay so photo stands out — z-index 25, below target's 30
   const overlay = document.createElement('div');
   overlay.className = 'kill-overlay';
   document.body.appendChild(overlay);
