@@ -10,19 +10,17 @@ body {
   -webkit-user-select: none;
 }
 
-/* Starfield */
 #stars {
   position: fixed;
   inset: 0;
   z-index: 0;
 }
 
-/* Space vignette */
 body::after {
   content: '';
   position: fixed;
   inset: 0;
-  background: radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.7) 100%);
+  background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.55) 100%);
   pointer-events: none;
   z-index: 1;
 }
@@ -42,7 +40,7 @@ body::after {
   justify-content: space-between;
   align-items: center;
   padding: 0.875rem 1.5rem;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.6), transparent);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.65), transparent);
   pointer-events: none;
 }
 
@@ -52,7 +50,7 @@ body::after {
   font-size: 1.4rem;
   font-weight: bold;
   letter-spacing: 0.15em;
-  text-shadow: 0 0 12px rgba(160,100,255,0.8), 0 0 30px rgba(100,50,200,0.4);
+  text-shadow: 0 0 14px rgba(160,100,255,0.85), 0 0 40px rgba(100,50,200,0.4);
 }
 
 #hud-right {
@@ -76,7 +74,6 @@ body::after {
   color: #ffcc44;
   font-size: 0.95rem;
   font-weight: bold;
-  letter-spacing: 0.05em;
   min-width: 140px;
   text-align: right;
   opacity: 0;
@@ -86,7 +83,6 @@ body::after {
 
 #streak-display.visible { opacity: 1; }
 
-/* Mute button */
 .mute-btn {
   background: rgba(255,255,255,0.08);
   border: 1px solid rgba(255,255,255,0.15);
@@ -99,38 +95,39 @@ body::after {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.2s, border-color 0.2s;
+  transition: background 0.2s;
   padding: 0;
   line-height: 1;
 }
 
-.mute-btn:hover {
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(255,255,255,0.3);
-}
+.mute-btn:hover { background: rgba(255,255,255,0.18); }
+.mute-btn.muted { opacity: 0.4; }
 
-.mute-btn.muted {
-  opacity: 0.4;
-}
-
-/* Floating targets */
+/* Floating targets — no fixed height, natural aspect ratio */
 .target {
   position: absolute;
-  border-radius: 3px;
+  border-radius: 4px;
   overflow: hidden;
-  box-shadow: 0 0 20px rgba(0,0,0,0.8), 0 0 6px rgba(100,60,200,0.3);
+  box-shadow: 0 0 22px rgba(0,0,0,0.85), 0 0 8px rgba(100,60,200,0.25);
   will-change: transform, left, top;
   cursor: crosshair;
+  /* NO height set here — determined by content */
 }
 
-.target img,
-.target video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.target img {
   display: block;
+  width: 100%;
+  height: auto;        /* natural aspect ratio — no cropping */
   pointer-events: none;
   -webkit-user-drag: none;
+}
+
+.target video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain; /* show full video, no crop */
+  pointer-events: none;
 }
 
 .target.exploding {
@@ -141,11 +138,10 @@ body::after {
 
 @keyframes explode {
   0%   { transform: rotate(var(--rot)) scale(1);    opacity: 1;   filter: none; }
-  35%  { transform: rotate(calc(var(--rot) + 18deg)) scale(1.45); opacity: 0.9; filter: brightness(5) saturate(0); }
-  100% { transform: rotate(calc(var(--rot) + 70deg)) scale(0.04); opacity: 0;   filter: brightness(3); }
+  35%  { transform: rotate(calc(var(--rot) + 18deg)) scale(1.5);  opacity: 0.9; filter: brightness(5) saturate(0); }
+  100% { transform: rotate(calc(var(--rot) + 75deg)) scale(0.04); opacity: 0;   filter: brightness(3); }
 }
 
-/* Screen flash on kill */
 .kill-flash {
   position: fixed;
   inset: 0;
@@ -160,7 +156,6 @@ body::after {
   to   { opacity: 0; }
 }
 
-/* Streak popup */
 .streak-popup {
   position: fixed;
   top: 45%;
@@ -184,7 +179,6 @@ body::after {
   100% { opacity: 0; transform: translate(-50%, -44%) scale(0.85); }
 }
 
-/* Loading screen */
 #loadingScreen {
   position: fixed;
   inset: 0;
@@ -196,10 +190,7 @@ body::after {
   transition: opacity 0.6s;
 }
 
-#loadingScreen.gone {
-  opacity: 0;
-  pointer-events: none;
-}
+#loadingScreen.gone { opacity: 0; pointer-events: none; }
 
 .loading-inner { text-align: center; }
 
