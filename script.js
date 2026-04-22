@@ -492,6 +492,83 @@ if (IS_MOBILE) {
   }, { passive: true });
 }
 
+// === DESKTOP MOUSE CONTROLS ===
+if (!IS_MOBILE) {
+  let mouseDown = false;
+  let pressTimer = null, pressActive = false, pressEl = null;
+  let dragStartX = 0, dragStartY = 0, dragStartT = 0;
+  let dragCurX = 0, dragCurY = 0;
+  let lastClickTime = 0, lastClickX = 0, lastClickY = 0;
+
+  function endMousePress() {
+    clearTimeout(pressTimer);
+    if (pressActive) {
+      pressActive = false;
+      if (pressEl) { pressEl.style.opacity = '0'; setTimeout(() => pressEl && pressEl.remove(), 300); pressEl = null; }
+    }
+  }
+
+  gameArea.addEventListener('mousedown', e => {
+    if (e.target.closest('.target')) return;
+    mouseDown = true;
+    dragStartX = dragCurX = e.clientX;
+    dragStartY = dragCurY = e.clientY;
+    dragStartT = Date.now();
+
+    // Double click → shockwave
+    const now = Date.now();
+    if (now - lastClickTime < 300 && Math.hypot(e.clientX - lastClickX, e.clientY - lastClickY) < 40) {
+      triggerShockwave(e.clientX, e.clientY);
+      lastClickTime = 0;
+      return;
+    }
+    lastClickTime = now; lastClickX = e.clientX; lastClickY = e.clientY;
+
+    // Long press
+    pressTimer = setTimeout(() => {
+      pressActive = true;
+      pressEl = document.createElement('div');
+      Object.assign(pressEl.style, {
+        position: 'fixed', left: dragStartX + 'px', top: dragStartY + 'px',
+        width: '60px', height: '60px', borderRadius: '50%',
+        border: '2px solid rgba(200,150,255,0.5)',
+        background: 'rgba(200,150,255,0.07)',
+        transform: 'translate(-50%,-50%) scale(1)',
+        pointerEvents: 'none', zIndex: '200',
+        transition: 'transform 1.8s ease-out, opacity 0.3s',
+      });
+      document.body.appendChild(pressEl);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        pressEl.style.transform = 'translate(-50%,-50%) scale(4)';
+      }));
+    }, 380);
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!mouseDown) return;
+    dragCurX = e.clientX;
+    dragCurY = e.clientY;
+    if (Math.hypot(e.clientX - dragStartX, e.clientY - dragStartY) > 12) clearTimeout(pressTimer);
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!mouseDown) return;
+    mouseDown = false;
+    if (pressActive) { endMousePress(); return; }
+    endMousePress();
+
+    const dt   = Date.now() - dragStartT;
+    const ddx  = dragCurX - dragStartX;
+    const ddy  = dragCurY - dragStartY;
+    const dist = Math.hypot(ddx, ddy);
+    const vel  = dist / Math.max(dt, 1);
+
+    if (vel > 0.6 && dist > 40 && dt < 400) {
+      triggerFlick(dragStartX, dragStartY, ddx/dist, ddy/dist, Math.min(vel, 2));
+    }
+  });
+}
+
 // === WARP STARFIELD ===
 const canvas = document.getElementById('stars');
 const sctx   = canvas.getContext('2d');
@@ -631,8 +708,7 @@ function spawnTarget() {
 
   targets.push(target);
   gameArea.appendChild(el);
-  // Desktop = instant kill (3 dmg), mobile = 1 damage per tap
-  el.addEventListener('click', e => { e.stopPropagation(); damageTarget(target, IS_MOBILE ? 1 : MAX_HP); });
+  el.addEventListener('click', e => { e.stopPropagation(); damageTarget(target, 1); });
 }
 
 // === SHOOT — fly to center, hold, then explode ===
