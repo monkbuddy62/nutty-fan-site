@@ -231,6 +231,17 @@ body::after {
   50%       { opacity: 0.2; }
 }
 
+#buildId {
+  position: fixed;
+  bottom: 0.5rem;
+  right: 0.75rem;
+  font-family: 'Courier New', monospace;
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.2);
+  pointer-events: none;
+  z-index: 100;
+}
+
 @media (max-width: 600px) {
   #hud-title { font-size: 1rem; }
   #score-display { font-size: 0.9rem; }
