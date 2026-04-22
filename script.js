@@ -34,7 +34,7 @@ const streakMessages = {
   3: '🔥 TRIPLE KILL',
   4: '💀 QUAD KILL',
   5: '⚡ RAMPAGE',
-  6: '🌀 NUTTY OBLITERATED',
+  6: '🌀 PNUT OBLITERATED',
   7: '☠️ UNSTOPPABLE',
 };
 
@@ -111,6 +111,170 @@ muteBtn.addEventListener('click', () => {
   if (muted && currentClip) { currentClip.pause(); currentClip.currentTime = 0; }
 });
 
+// === EXPLOSION STYLES ===
+
+function spawnParticle(cx, cy, styles, flyX, flyY, duration, delay) {
+  const p = document.createElement('div');
+  Object.assign(p.style, {
+    position: 'fixed',
+    left: cx + 'px',
+    top: cy + 'px',
+    pointerEvents: 'none',
+    zIndex: '200',
+    transition: `transform ${duration}s ease-out ${delay}s, opacity ${duration}s ease-out ${delay}s`,
+    ...styles,
+  });
+  document.body.appendChild(p);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    p.style.transform = `translate(${flyX}px, ${flyY}px) ${styles._endTransform || ''}`;
+    p.style.opacity = '0';
+  }));
+  setTimeout(() => p.remove(), (duration + delay) * 1000 + 150);
+  return p;
+}
+
+function explodeDust(cx, cy) {
+  for (let i = 0; i < 30; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 60 + Math.random() * 180;
+    const size  = 3 + Math.random() * 7;
+    const dur   = 0.4 + Math.random() * 0.45;
+    const hue   = 20 + Math.random() * 40;
+    const light = 35 + Math.random() * 30;
+    spawnParticle(cx, cy, {
+      width: size + 'px', height: size + 'px',
+      background: `hsl(${hue},15%,${light}%)`,
+      borderRadius: '50%',
+      transform: 'translate(-50%,-50%)',
+      opacity: '1',
+    }, Math.cos(angle) * dist, Math.sin(angle) * dist, dur, 0);
+  }
+  // Extra fine specks
+  for (let i = 0; i < 20; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist  = 30 + Math.random() * 80;
+    spawnParticle(cx, cy, {
+      width: '2px', height: '2px',
+      background: `rgba(200,180,140,0.8)`,
+      borderRadius: '50%',
+      transform: 'translate(-50%,-50%)',
+      opacity: '0.8',
+    }, Math.cos(angle) * dist, Math.sin(angle) * dist, 0.6 + Math.random() * 0.3, Math.random() * 0.1);
+  }
+}
+
+function explodeStars(cx, cy) {
+  const colors = ['#ffcc44', '#ff006e', '#c8aaff', '#44eeff', '#ffffff', '#ffaa00'];
+  const symbols = ['✦', '★', '✸', '✺', '✷', '⬟'];
+  for (let i = 0; i < 18; i++) {
+    const angle = (i / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+    const dist  = 100 + Math.random() * 220;
+    const size  = 10 + Math.random() * 18;
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const sym   = symbols[Math.floor(Math.random() * symbols.length)];
+    const dur   = 0.55 + Math.random() * 0.45;
+    const rot   = (Math.random() - 0.5) * 540;
+    const p = spawnParticle(cx, cy, {
+      fontSize: size + 'px',
+      color: color,
+      textShadow: `0 0 8px ${color}, 0 0 20px ${color}`,
+      transform: 'translate(-50%,-50%) rotate(0deg) scale(1)',
+      opacity: '1',
+      lineHeight: '1',
+      _endTransform: `rotate(${rot}deg) scale(0)`,
+    }, Math.cos(angle) * dist, Math.sin(angle) * dist, dur, 0);
+    p.textContent = sym;
+  }
+  // Central flash
+  const flash = document.createElement('div');
+  Object.assign(flash.style, {
+    position: 'fixed', left: cx + 'px', top: cy + 'px',
+    width: '80px', height: '80px',
+    background: 'radial-gradient(circle, rgba(255,220,80,0.9) 0%, transparent 70%)',
+    borderRadius: '50%',
+    transform: 'translate(-50%,-50%) scale(0)',
+    pointerEvents: 'none', zIndex: '199',
+    transition: 'transform 0.15s ease-out, opacity 0.3s ease-out 0.1s',
+  });
+  document.body.appendChild(flash);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    flash.style.transform = 'translate(-50%,-50%) scale(3)';
+    flash.style.opacity = '0';
+  }));
+  setTimeout(() => flash.remove(), 450);
+}
+
+function explodeShatter(target) {
+  const rect = target.el.getBoundingClientRect();
+  const imgEl = target.el.querySelector('img');
+  if (!imgEl || !imgEl.src) { explodeStars(rect.left + rect.width/2, rect.top + rect.height/2); return; }
+
+  const cols = 3, rows = 2;
+  const pw = rect.width  / cols;
+  const ph = rect.height / rows;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const piece = document.createElement('div');
+      const px = rect.left + c * pw;
+      const py = rect.top  + r * ph;
+
+      const flyX = (c - cols/2 + 0.5) * (120 + Math.random() * 200);
+      const flyY = (r - rows/2 + 0.5) * (120 + Math.random() * 200) + 60;
+      const rot  = -200 + Math.random() * 400;
+      const dur  = 0.55 + Math.random() * 0.25;
+
+      Object.assign(piece.style, {
+        position: 'fixed',
+        left: px + 'px', top: py + 'px',
+        width: pw + 'px', height: ph + 'px',
+        backgroundImage: `url(${imgEl.src})`,
+        backgroundSize: `${rect.width}px ${rect.height}px`,
+        backgroundPosition: `-${c * pw}px -${r * ph}px`,
+        pointerEvents: 'none', zIndex: '200',
+        transition: `transform ${dur}s ease-in, opacity ${dur * 0.8}s ease-in ${dur * 0.2}s`,
+        transform: 'rotate(0deg)',
+        opacity: '1',
+      });
+      document.body.appendChild(piece);
+
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        piece.style.transform = `translate(${flyX}px, ${flyY}px) rotate(${rot}deg)`;
+        piece.style.opacity = '0';
+      }));
+      setTimeout(() => piece.remove(), (dur + 0.2) * 1000 + 100);
+    }
+  }
+}
+
+const EXPLOSION_STYLES = ['dust', 'stars', 'shatter'];
+
+function triggerExplosion(target) {
+  const rect = target.el.getBoundingClientRect();
+  const cx = rect.left + rect.width  / 2;
+  const cy = rect.top  + rect.height / 2;
+
+  const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
+
+  if (style === 'dust')    explodeDust(cx, cy);
+  else if (style === 'stars')   explodeStars(cx, cy);
+  else if (style === 'shatter') explodeShatter(target);
+
+  // Screen flash
+  const flash = document.createElement('div');
+  flash.className = 'kill-flash';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 220);
+
+  // CSS collapse animation
+  target.el.classList.remove('zooming');
+  target.el.classList.add('exploding');
+  setTimeout(() => {
+    target.el.remove();
+    setTimeout(spawnTarget, 200 + Math.random() * 600);
+  }, 420);
+}
+
 // === WARP STARFIELD ===
 const canvas = document.getElementById('stars');
 const sctx   = canvas.getContext('2d');
@@ -118,9 +282,9 @@ const NUM_STARS = 320;
 let stars = [];
 
 function resetStar(s, randomZ) {
-  s.x = (Math.random() - 0.5) * 2;
-  s.y = (Math.random() - 0.5) * 2;
-  s.z = randomZ ? Math.random() : 1.0;
+  s.x  = (Math.random() - 0.5) * 2;
+  s.y  = (Math.random() - 0.5) * 2;
+  s.z  = randomZ ? Math.random() : 1.0;
   s.pz = s.z;
 }
 
@@ -128,39 +292,26 @@ function initStars() {
   canvas.width  = window.innerWidth;
   canvas.height = window.innerHeight;
   stars = [];
-  for (let i = 0; i < NUM_STARS; i++) {
-    const s = {};
-    resetStar(s, true); // spread at random depths on init
-    stars.push(s);
-  }
+  for (let i = 0; i < NUM_STARS; i++) { const s = {}; resetStar(s, true); stars.push(s); }
 }
 
 function drawWarp() {
-  const W  = canvas.width;
-  const H  = canvas.height;
-  const cx = W / 2;
-  const cy = H / 2;
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
 
-  // Fade trail — lower alpha = longer streaks
   sctx.fillStyle = 'rgba(0,0,0,0.18)';
   sctx.fillRect(0, 0, W, H);
 
-  const SPEED = 0.008;
-  const SCALE = 0.55;
-
   for (const s of stars) {
     s.pz = s.z;
-    s.z -= SPEED;
-
+    s.z -= 0.008;
     if (s.z <= 0) { resetStar(s, false); continue; }
 
-    // Project current and previous positions
-    const sx  = (s.x  / s.z)  * cx * SCALE + cx;
-    const sy  = (s.y  / s.z)  * cy * SCALE + cy;
-    const spx = (s.x  / s.pz) * cx * SCALE + cx;
-    const spy = (s.y  / s.pz) * cy * SCALE + cy;
+    const sx  = (s.x  / s.z)  * cx * 0.55 + cx;
+    const sy  = (s.y  / s.z)  * cy * 0.55 + cy;
+    const spx = (s.x  / s.pz) * cx * 0.55 + cx;
+    const spy = (s.y  / s.pz) * cy * 0.55 + cy;
 
-    // Skip if off screen
     if (sx < 0 || sx > W || sy < 0 || sy > H) { resetStar(s, false); continue; }
 
     const brightness = Math.min(1, (1 - s.z) * 1.4);
@@ -187,7 +338,7 @@ window.addEventListener('resize', () => {
 // === INPUT ===
 window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
-gameArea.addEventListener('click', () => playPew()); // miss click
+gameArea.addEventListener('click', () => playPew());
 
 // === LOAD & START ===
 fetch('media/manifest.json')
@@ -218,12 +369,11 @@ function spawnTarget() {
 
   const W = window.innerWidth, H = window.innerHeight;
   const w = 150 + Math.random() * 110;
-
   const x = Math.random() * Math.max(1, W - w);
   const y = Math.random() * Math.max(1, H - w);
 
-  const spd   = BASE_SPEED + Math.random() * 0.7;
-  const angle = Math.random() * Math.PI * 2;
+  const spd      = BASE_SPEED + Math.random() * 0.7;
+  const angle    = Math.random() * Math.PI * 2;
   const rot      = -15 + Math.random() * 30;
   const rotSpeed = -0.18 + Math.random() * 0.36;
 
@@ -231,7 +381,6 @@ function spawnTarget() {
   el.className = 'target';
   el.style.cssText = `width:${w}px;left:${x}px;top:${y}px;--rot:${rot}deg;transform:rotate(${rot}deg)`;
 
-  // h starts as square placeholder; updated once media dimensions are known
   const target = {
     el, x, y,
     dx: Math.cos(angle) * spd,
@@ -245,7 +394,6 @@ function spawnTarget() {
     vid.autoplay = true; vid.muted = true; vid.loop = true; vid.playsInline = true;
     vid.style.cssText = 'display:block;width:100%;';
     vid.src = MEDIA_DIR + encodeURIComponent(file);
-    // Update h once we know video dimensions
     vid.addEventListener('loadedmetadata', () => {
       if (vid.videoWidth > 0) {
         target.h = w * (vid.videoHeight / vid.videoWidth);
@@ -256,12 +404,8 @@ function spawnTarget() {
   } else {
     const img = document.createElement('img');
     img.alt = ''; img.loading = 'lazy';
-    // height:auto on img means container auto-sizes; read back after load
     img.onload = () => {
-      if (img.naturalWidth > 0) {
-        target.h = w * (img.naturalHeight / img.naturalWidth);
-        // no need to set el height — img height:auto drives it
-      }
+      if (img.naturalWidth > 0) target.h = w * (img.naturalHeight / img.naturalWidth);
     };
     img.src = MEDIA_DIR + encodeURIComponent(file);
     el.appendChild(img);
@@ -272,7 +416,7 @@ function spawnTarget() {
   el.addEventListener('click', e => { e.stopPropagation(); shootTarget(target); });
 }
 
-// === SHOOT ===
+// === SHOOT — zoom in first, then explode ===
 function shootTarget(target) {
   if (target.dead) return;
   target.dead = true;
@@ -282,27 +426,25 @@ function shootTarget(target) {
   scoreVal.textContent = score;
 
   const now = Date.now();
-  killStreak = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
+  killStreak   = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
   lastKillTime = now;
   if (killStreak >= 3) showStreakPopup(killStreak);
 
-  const flash = document.createElement('div');
-  flash.className = 'kill-flash';
-  document.body.appendChild(flash);
-  setTimeout(() => flash.remove(), 220);
-
   playPew();
-  playBoom();
-  playNuttyClip();
 
-  target.el.classList.add('exploding');
+  // Freeze position so it stays put during zoom
+  target.el.style.left = target.x + 'px';
+  target.el.style.top  = target.y + 'px';
+  target.el.classList.add('zooming');
+
   setTimeout(() => {
-    target.el.remove();
-    setTimeout(spawnTarget, 200 + Math.random() * 600);
-  }, 450);
+    playBoom();
+    playNuttyClip();
+    triggerExplosion(target);
+  }, 520);
 }
 
-// === MAIN LOOP ===
+// === GAME LOOP ===
 function loop() {
   const W = window.innerWidth, H = window.innerHeight;
 
@@ -321,7 +463,6 @@ function loop() {
       t.dy -= (fy / dist) * force;
     }
 
-    // Damping + speed clamp
     t.dx *= DAMPING;
     t.dy *= DAMPING;
     const spd = Math.sqrt(t.dx * t.dx + t.dy * t.dy);
@@ -332,7 +473,6 @@ function loop() {
     t.y   += t.dy;
     t.rot += t.rotSpeed;
 
-    // Bounce
     if (t.x <= 0)       { t.dx =  Math.abs(t.dx); t.x = 0; }
     if (t.x + t.w >= W) { t.dx = -Math.abs(t.dx); t.x = W - t.w; }
     if (t.y <= 0)       { t.dy =  Math.abs(t.dy); t.y = 0; }
