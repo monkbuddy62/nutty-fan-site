@@ -298,7 +298,7 @@ body::after {
   font-size: 0.65rem;
   color: rgba(0,255,200,0.55);
   pointer-events: none;
-  z-index: 100;
+  z-index: 150;
 }
 
 @media (max-width: 600px) {
