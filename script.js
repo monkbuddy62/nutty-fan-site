@@ -7,6 +7,7 @@ const FLEE_RADIUS   = 140;
 const FLEE_FORCE    = 2.6;
 const HIT_RADIUS    = 120;   // px from cursor center to count as a hit
 const FIRE_RATE_MS  = 90;    // autofire interval when holding mouse down
+const BASE_PX       = 260;   // element base width — never changes after spawn; perspective handled via CSS scale
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -52,6 +53,8 @@ let audioCtx       = null;
 let currentClip    = null;
 let shootFlash     = null;      // { x, y, t }
 let autoFireTimer  = null;
+let VW             = window.innerWidth;
+let VH             = window.innerHeight;
 
 // === DOM ===
 const gameArea      = document.getElementById('gameArea');
@@ -224,20 +227,20 @@ function explodeStars(cx, cy) {
 }
 
 function explodeShatter(target) {
-  const rect  = target.el.getBoundingClientRect();
   const imgEl = target.el.querySelector('img');
-  if (!imgEl || !imgEl.src) { explodeStars(rect.left + rect.width/2, rect.top + rect.height/2); return; }
+  if (!imgEl || !imgEl.src) { explodeStars(target.screenX, target.screenY); return; }
 
   const cols = 3, rows = 2;
-  const pw = rect.width  / cols;
-  const ph = rect.height / rows;
-  const bw = rect.width, bh = rect.height;
+  const bw = target.w, bh = target.h;
+  const pw = bw / cols, ph = bh / rows;
+  const ox = target.screenX - bw / 2;   // visual top-left x
+  const oy = target.screenY - bh / 2;   // visual top-left y
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const piece = document.createElement('div');
-      const px  = rect.left + c * pw;
-      const py  = rect.top  + r * ph;
+      const px  = ox + c * pw;
+      const py  = oy + r * ph;
       const flyX = (c - cols/2 + 0.5) * (120 + Math.random() * 200);
       const flyY = (r - rows/2 + 0.5) * (120 + Math.random() * 200) + 60;
       const rot  = -200 + Math.random() * 400;
@@ -267,10 +270,9 @@ function explodeShatter(target) {
 const EXPLOSION_STYLES = ['dust', 'stars', 'shatter'];
 
 function triggerExplosion(target) {
-  const el   = target.el;
-  const rect = el.getBoundingClientRect();
-  const cx   = rect.left + rect.width  / 2;
-  const cy   = rect.top  + rect.height / 2;
+  const el = target.el;
+  const cx = target.screenX;
+  const cy = target.screenY;
 
   const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
   if (style === 'dust')         explodeDust(cx, cy);
@@ -282,10 +284,23 @@ function triggerExplosion(target) {
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 220);
 
-  const finalRot = -180 + Math.random() * 360;
-  el.style.transition = 'transform 0.4s ease-in, opacity 0.35s ease-in';
-  el.style.transform  = `translate(${target._dx}px, ${target._dy}px) rotate(${finalRot}deg) scale(0.03)`;
-  el.style.opacity    = '0';
+  // Snap to fixed position so the shrink-out happens in place
+  const hw = target.w / 2, hh = target.h / 2;
+  el.style.transition = 'none';
+  el.style.position   = 'fixed';
+  el.style.left       = (cx - hw) + 'px';
+  el.style.top        = (cy - hh) + 'px';
+  el.style.width      = target.w + 'px';
+  el.style.height     = target.h + 'px';
+  el.style.transform  = `rotate(${target.rot}deg)`;
+  document.body.appendChild(el);
+
+  const finalRot = target.rot + (-180 + Math.random() * 360);
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    el.style.transition = 'transform 0.4s ease-in, opacity 0.35s ease-in';
+    el.style.transform  = `rotate(${finalRot}deg) scale(0.03)`;
+    el.style.opacity    = '0';
+  }));
 
   setTimeout(() => {
     el.remove();
@@ -367,10 +382,9 @@ function drawHudOverlay() {
     if (d < nearestD) { nearestD = d; locked = t; }
   }
   if (locked && locked.w < 550) {
-    const rect = locked.el.getBoundingClientRect();
     const pad = 12, tl = 20;
-    const lx = rect.left - pad, ly = rect.top  - pad;
-    const rx = rect.right + pad, ry = rect.bottom + pad;
+    const lx = locked.screenX - locked.w/2 - pad, ly = locked.screenY - locked.h/2 - pad;
+    const rx = locked.screenX + locked.w/2 + pad, ry = locked.screenY + locked.h/2 + pad;
     xhCtx.save();
     xhCtx.strokeStyle = '#ff6600';
     xhCtx.shadowColor = '#ff6600';
@@ -495,6 +509,8 @@ window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clien
 window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
 
 window.addEventListener('resize', () => {
+  VW = window.innerWidth;
+  VH = window.innerHeight;
   initStars();
   resizeXhCanvas();
 });
@@ -547,14 +563,17 @@ function spawnTarget() {
   const rot      = (Math.random() - 0.5) * 30;
   const rotSpeed = (Math.random() - 0.5) * 0.12;
 
-  // Initial screen position (tiny, near center)
-  const initDisplaySize = baseSize / z;
-  const initSX = W / 2 + wx / z;
-  const initSY = H / 2 + wy / z;
+  // Element stays BASE_PX wide forever; perspective zoom is applied via CSS scale.
+  // This means only `transform` changes each frame — no left/top/width thrash.
+  const initSX = VW / 2 + wx / z;
+  const initSY = VH / 2 + wy / z;
+  const initS  = baseSize / (BASE_PX * z);
+  const initTx = initSX - BASE_PX / 2;
+  const initTy = initSY - BASE_PX / 2;  // hRatio=1 until image loads
 
   const el = document.createElement('div');
   el.className = 'target';
-  el.style.cssText = `width:${initDisplaySize}px;left:${initSX - initDisplaySize/2}px;top:${initSY - initDisplaySize/2}px;transform:rotate(${rot}deg)`;
+  el.style.cssText = `width:${BASE_PX}px;left:0;top:0;transform:translate(${initTx}px,${initTy}px) scale(${initS}) rotate(${rot}deg)`;
 
   const target = {
     el, file, isVideo,
@@ -562,10 +581,9 @@ function spawnTarget() {
     hRatio: 1,
     rot, rotSpeed,
     dead: false,
-    // screen-space cache (updated every frame, used for hit detection & shootTarget)
     screenX: initSX, screenY: initSY,
-    x: initSX - initDisplaySize/2, y: initSY - initDisplaySize/2,
-    w: initDisplaySize, h: initDisplaySize,
+    x: initSX - baseSize/(z*2), y: initSY - baseSize/(z*2),
+    w: baseSize/z, h: baseSize/z,
   };
 
   if (isVideo) {
@@ -612,8 +630,6 @@ function shootTarget(target) {
 
 // === GAME LOOP ===
 function loop() {
-  const W = window.innerWidth, H = window.innerHeight;
-
   drawWarp();
   drawHudOverlay();
 
@@ -623,16 +639,12 @@ function loop() {
     const t = targets[i];
     if (t.dead) continue;
 
-    // Advance toward camera
     t.z -= t.zSpeed;
 
-    // Compute current screen position & size
-    const displaySize = t.baseSize / t.z;
-    const dispH       = displaySize * (t.hRatio || 1);
-    const sx          = W / 2 + t.wx / t.z;
-    const sy          = H / 2 + t.wy / t.z;
+    const sx = VW / 2 + t.wx / t.z;
+    const sy = VH / 2 + t.wy / t.z;
 
-    // Flee: push target away in world space when cursor is close on screen
+    // Flee: nudge world-space offset so target drifts away from cursor on screen
     const fx   = mouseX - sx;
     const fy   = mouseY - sy;
     const dist = Math.sqrt(fx * fx + fy * fy);
@@ -642,40 +654,40 @@ function loop() {
       t.wy -= (fy / dist) * force * t.z;
     }
 
-    // Clamp drift so targets don't flee completely off-axis
-    const maxOffset = Math.max(W, H) * 1.5;
-    t.wx = Math.max(-maxOffset, Math.min(maxOffset, t.wx));
-    t.wy = Math.max(-maxOffset, Math.min(maxOffset, t.wy));
+    const maxOff = Math.max(VW, VH) * 1.5;
+    if (t.wx >  maxOff) t.wx =  maxOff;
+    if (t.wx < -maxOff) t.wx = -maxOff;
+    if (t.wy >  maxOff) t.wy =  maxOff;
+    if (t.wy < -maxOff) t.wy = -maxOff;
 
     t.rot += t.rotSpeed;
 
-    // Cache for hit detection and shootTarget
+    const hr   = t.hRatio || 1;
+    const dw   = t.baseSize / t.z;           // visual width
+    const dh   = dw * hr;                    // visual height
+    const s    = dw / BASE_PX;               // CSS scale factor
+    const tx   = sx - BASE_PX / 2;           // translate so element center = sx,sy
+    const ty   = sy - BASE_PX * hr / 2;
+
+    // Cache for hit detection — no getBoundingClientRect needed
     t.screenX = sx;
     t.screenY = sy;
-    t.x = sx - displaySize / 2;
-    t.y = sy - dispH / 2;
-    t.w = displaySize;
-    t.h = dispH;
+    t.w = dw;
+    t.h = dh;
 
-    // Remove when past the camera or screen center is far off-screen
-    if (t.z < 0.1 || sx < -500 || sx > W + 500 || sy < -500 || sy > H + 500) {
+    if (t.z < 0.1 || sx < -500 || sx > VW + 500 || sy < -500 || sy > VH + 500) {
       t.el.remove();
       targets.splice(i, 1);
       setTimeout(spawnTarget, 150 + Math.random() * 400);
       continue;
     }
 
-    totalSpeed += t.zSpeed * 100; // proxy speed readout
+    totalSpeed += t.zSpeed * 100;
     activeCount++;
 
-    // z-index: closer targets draw on top of distant ones
-    t.el.style.zIndex   = Math.min(20, Math.max(1, Math.round(8 / t.z)));
-    t.el.style.width    = displaySize + 'px';
-    if (t.isVideo) t.el.style.height = dispH + 'px';
-    t.el.style.left     = t.x + 'px';
-    t.el.style.top      = t.y + 'px';
-    t.el.style.transform = `rotate(${t.rot}deg)`;
-    t.el.style.setProperty('--rot', t.rot + 'deg');
+    // Single transform update — GPU composited, no layout reflow
+    t.el.style.zIndex    = Math.min(20, Math.max(1, Math.round(8 / t.z)));
+    t.el.style.transform = `translate(${tx}px,${ty}px) scale(${s}) rotate(${t.rot}deg)`;
   }
 
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
