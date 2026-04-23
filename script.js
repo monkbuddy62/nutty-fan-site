@@ -272,11 +272,6 @@ function triggerExplosion(target) {
   const cx   = rect.left + rect.width  / 2;
   const cy   = rect.top  + rect.height / 2;
 
-  if (target._overlay) {
-    target._overlay.style.opacity = '0';
-    setTimeout(() => target._overlay.remove(), 500);
-  }
-
   const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
   if (style === 'dust')         explodeDust(cx, cy);
   else if (style === 'stars')   explodeStars(cx, cy);
@@ -594,7 +589,7 @@ function spawnTarget() {
   gameArea.appendChild(el);
 }
 
-// === SHOOT — fly to center, hold, explode ===
+// === SHOOT — explode immediately in place ===
 function shootTarget(target) {
   if (target.dead) return;
   target.dead = true;
@@ -608,41 +603,11 @@ function shootTarget(target) {
   lastKillTime = now;
   if (killStreak >= 3) showStreakPopup(killStreak);
 
-  const el = target.el;
-  const W  = window.innerWidth, H = window.innerHeight;
-
-  el.style.position      = 'fixed';
-  el.style.left          = target.x + 'px';
-  el.style.top           = target.y + 'px';
-  el.style.width         = target.w + 'px';
-  el.style.height        = target.isVideo ? target.h + 'px' : 'auto';
-  el.style.pointerEvents = 'none';
-  el.style.zIndex        = '30';
-  document.body.appendChild(el);
-
-  const overlay = document.createElement('div');
-  overlay.className = 'kill-overlay';
-  document.body.appendChild(overlay);
-  requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
-  target._overlay = overlay;
-
-  const dx    = W / 2 - target.screenX;
-  const dy    = H / 2 - target.screenY;
-  const scale = Math.min(W * 0.72, H * 0.72) / target.w;
-  target._dx    = dx;
-  target._dy    = dy;
-  target._scale = scale;
-
-  el.style.transition = 'transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    el.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(${scale})`;
-  }));
-
-  setTimeout(() => {
-    playBoom();
-    playNuttyClip();
-    triggerExplosion(target);
-  }, 700 + 2800);
+  playBoom();
+  playNuttyClip();
+  target._dx = 0;
+  target._dy = 0;
+  triggerExplosion(target);
 }
 
 // === GAME LOOP ===
