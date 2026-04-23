@@ -296,7 +296,7 @@ body::after {
   right: 0.75rem;
   font-family: 'Courier New', monospace;
   font-size: 0.65rem;
-  color: rgba(0,255,200,0.18);
+  color: rgba(0,255,200,0.55);
   pointer-events: none;
   z-index: 100;
 }
