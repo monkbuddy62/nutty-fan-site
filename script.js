@@ -1,12 +1,12 @@
-const AUDIO_DIR   = 'audio/';
-const MEDIA_DIR   = 'media/';
+const AUDIO_DIR     = 'audio/';
+const MEDIA_DIR     = 'media/';
 const IS_MOBILE     = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
 const MAX_ON_SCREEN = IS_MOBILE ? 6 : 12;
-const MAX_SPEED     = 8;
+const MAX_SPEED     = 10;
 const FLEE_RADIUS   = 140;
-const FLEE_FORCE    = 2.8;
-const DAMPING       = 0.985;
-const HIT_RADIUS    = 110;  // px from cursor center to count as a hit
+const FLEE_FORCE    = 2.6;
+const HIT_RADIUS    = 120;   // px from cursor center to count as a hit
+const FIRE_RATE_MS  = 90;    // autofire interval when holding mouse down
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -40,17 +40,18 @@ const streakMessages = {
 };
 
 // === STATE ===
-let mediaFiles   = [];
-let targets      = [];
-let score        = 0;
-let killStreak   = 0;
-let lastKillTime = 0;
-let muted        = false;
-let mouseX       = -9999;
-let mouseY       = -9999;
-let audioCtx     = null;
-let currentClip  = null;
-let shootFlash   = null;   // { x, y, t } — expanding ring on click
+let mediaFiles     = [];
+let targets        = [];
+let score          = 0;
+let killStreak     = 0;
+let lastKillTime   = 0;
+let muted          = false;
+let mouseX         = -9999;
+let mouseY         = -9999;
+let audioCtx       = null;
+let currentClip    = null;
+let shootFlash     = null;      // { x, y, t }
+let autoFireTimer  = null;
 
 // === DOM ===
 const gameArea      = document.getElementById('gameArea');
@@ -81,29 +82,35 @@ function getCtx() {
 function playPew() {
   if (muted) return;
   try {
-    const c = getCtx();
-    const osc = c.createOscillator(), gain = c.createGain();
+    const c    = getCtx();
+    const osc  = c.createOscillator();
+    const gain = c.createGain();
     osc.connect(gain); gain.connect(c.destination);
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(880, c.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(140, c.currentTime + 0.13);
-    gain.gain.setValueAtTime(0.16, c.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.13);
-    osc.start(c.currentTime); osc.stop(c.currentTime + 0.14);
+    // slight random pitch variation for the rapid-fire feel
+    const baseFreq = 800 + Math.random() * 160;
+    osc.frequency.setValueAtTime(baseFreq, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(130, c.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.14, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.12);
+    osc.start(c.currentTime); osc.stop(c.currentTime + 0.13);
   } catch(e) {}
 }
 
 function playBoom() {
   if (muted) return;
   try {
-    const c = getCtx();
+    const c   = getCtx();
     const len = Math.floor(c.sampleRate * 0.35);
     const buf = c.createBuffer(1, len, c.sampleRate);
     const d   = buf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
-    const src = c.createBufferSource(), flt = c.createBiquadFilter(), gain = c.createGain();
+    const src  = c.createBufferSource();
+    const flt  = c.createBiquadFilter();
+    const gain = c.createGain();
     flt.type = 'lowpass'; flt.frequency.value = 340;
-    src.buffer = buf; src.connect(flt); flt.connect(gain); gain.connect(c.destination);
+    src.buffer = buf;
+    src.connect(flt); flt.connect(gain); gain.connect(c.destination);
     gain.gain.setValueAtTime(0.5, c.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.35);
     src.start(c.currentTime);
@@ -168,7 +175,7 @@ function explodeDust(cx, cy) {
     const dist  = 30 + Math.random() * 80;
     spawnParticle(cx, cy, {
       width: '2px', height: '2px',
-      background: `rgba(200,180,140,0.8)`,
+      background: 'rgba(200,180,140,0.8)',
       borderRadius: '50%',
       transform: 'translate(-50%,-50%)',
       opacity: '0.8',
@@ -189,7 +196,7 @@ function explodeStars(cx, cy) {
     const rot   = (Math.random() - 0.5) * 540;
     const p = spawnParticle(cx, cy, {
       fontSize: size + 'px',
-      color: color,
+      color,
       textShadow: `0 0 8px ${color}, 0 0 20px ${color}`,
       transform: 'translate(-50%,-50%) rotate(0deg) scale(1)',
       opacity: '1',
@@ -224,14 +231,13 @@ function explodeShatter(target) {
   const cols = 3, rows = 2;
   const pw = rect.width  / cols;
   const ph = rect.height / rows;
-  const bw = rect.width;
-  const bh = rect.height;
+  const bw = rect.width, bh = rect.height;
 
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       const piece = document.createElement('div');
-      const px = rect.left + c * pw;
-      const py = rect.top  + r * ph;
+      const px  = rect.left + c * pw;
+      const py  = rect.top  + r * ph;
       const flyX = (c - cols/2 + 0.5) * (120 + Math.random() * 200);
       const flyY = (r - rows/2 + 0.5) * (120 + Math.random() * 200) + 60;
       const rot  = -200 + Math.random() * 400;
@@ -293,8 +299,8 @@ function triggerExplosion(target) {
 }
 
 // === WARP STARFIELD ===
-const canvas = document.getElementById('stars');
-const sctx   = canvas.getContext('2d');
+const canvas  = document.getElementById('stars');
+const sctx    = canvas.getContext('2d');
 const NUM_STARS = 320;
 let stars = [];
 
@@ -315,25 +321,19 @@ function initStars() {
 function drawWarp() {
   const W = canvas.width, H = canvas.height;
   const cx = W / 2, cy = H / 2;
-
   sctx.fillStyle = 'rgba(0,0,0,0.18)';
   sctx.fillRect(0, 0, W, H);
-
   for (const s of stars) {
     s.pz = s.z;
     s.z -= 0.008;
     if (s.z <= 0) { resetStar(s, false); continue; }
-
     const sx  = (s.x  / s.z)  * cx * 0.55 + cx;
     const sy  = (s.y  / s.z)  * cy * 0.55 + cy;
     const spx = (s.x  / s.pz) * cx * 0.55 + cx;
     const spy = (s.y  / s.pz) * cy * 0.55 + cy;
-
     if (sx < 0 || sx > W || sy < 0 || sy > H) { resetStar(s, false); continue; }
-
     const brightness = Math.min(1, (1 - s.z) * 1.4);
     const thickness  = Math.max(0.3, (1 - s.z) * 2.8);
-
     sctx.beginPath();
     sctx.moveTo(spx, spy);
     sctx.lineTo(sx, sy);
@@ -344,56 +344,38 @@ function drawWarp() {
 }
 
 // === HUD OVERLAY + CROSSHAIR ===
-
 function drawHudOverlay() {
   const W = xhCanvas.width, H = xhCanvas.height;
   xhCtx.clearRect(0, 0, W, H);
 
-  // --- Corner brackets ---
+  // Corner brackets
   const bSize = 64, m = 18;
   xhCtx.save();
   xhCtx.strokeStyle = '#00ffcc';
-  xhCtx.lineWidth = 2;
+  xhCtx.lineWidth   = 2;
   xhCtx.shadowColor = '#00ffcc';
-  xhCtx.shadowBlur = 12;
-  xhCtx.lineCap = 'square';
+  xhCtx.shadowBlur  = 12;
+  xhCtx.lineCap     = 'square';
   xhCtx.beginPath();
-  // top-left
-  xhCtx.moveTo(m + bSize, m);
-  xhCtx.lineTo(m, m);
-  xhCtx.lineTo(m, m + bSize);
-  // top-right
-  xhCtx.moveTo(W - m - bSize, m);
-  xhCtx.lineTo(W - m, m);
-  xhCtx.lineTo(W - m, m + bSize);
-  // bottom-left
-  xhCtx.moveTo(m, H - m - bSize);
-  xhCtx.lineTo(m, H - m);
-  xhCtx.lineTo(m + bSize, H - m);
-  // bottom-right
-  xhCtx.moveTo(W - m, H - m - bSize);
-  xhCtx.lineTo(W - m, H - m);
-  xhCtx.lineTo(W - m - bSize, H - m);
+  xhCtx.moveTo(m + bSize, m); xhCtx.lineTo(m,         m); xhCtx.lineTo(m,         m + bSize);
+  xhCtx.moveTo(W-m-bSize, m); xhCtx.lineTo(W-m,       m); xhCtx.lineTo(W-m,       m + bSize);
+  xhCtx.moveTo(m,   H-m-bSize); xhCtx.lineTo(m,   H-m); xhCtx.lineTo(m+bSize, H-m);
+  xhCtx.moveTo(W-m, H-m-bSize); xhCtx.lineTo(W-m, H-m); xhCtx.lineTo(W-m-bSize, H-m);
   xhCtx.stroke();
   xhCtx.restore();
 
-  // --- Targeting brackets around nearest in-range target ---
-  let lockedTarget = null;
-  let nearestDist  = HIT_RADIUS;
+  // Lock-on brackets around nearest target in range
+  let locked = null, nearestD = HIT_RADIUS;
   for (const t of targets) {
     if (t.dead) continue;
-    const cx = t.x + t.w / 2;
-    const cy = t.y + (t.h || t.w) / 2;
-    const d  = Math.hypot(mouseX - cx, mouseY - cy);
-    if (d < nearestDist) { nearestDist = d; lockedTarget = t; }
+    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
+    if (d < nearestD) { nearestD = d; locked = t; }
   }
-
-  if (lockedTarget) {
-    const rect = lockedTarget.el.getBoundingClientRect();
+  if (locked && locked.w < 550) {
+    const rect = locked.el.getBoundingClientRect();
     const pad = 12, tl = 20;
-    const lx = rect.left - pad, ly = rect.top - pad;
+    const lx = rect.left - pad, ly = rect.top  - pad;
     const rx = rect.right + pad, ry = rect.bottom + pad;
-
     xhCtx.save();
     xhCtx.strokeStyle = '#ff6600';
     xhCtx.shadowColor = '#ff6600';
@@ -401,37 +383,33 @@ function drawHudOverlay() {
     xhCtx.lineWidth   = 1.5;
     xhCtx.lineCap     = 'square';
     xhCtx.beginPath();
-    // TL
-    xhCtx.moveTo(lx + tl, ly); xhCtx.lineTo(lx, ly); xhCtx.lineTo(lx, ly + tl);
-    // TR
-    xhCtx.moveTo(rx - tl, ly); xhCtx.lineTo(rx, ly); xhCtx.lineTo(rx, ly + tl);
-    // BL
-    xhCtx.moveTo(lx, ry - tl); xhCtx.lineTo(lx, ry); xhCtx.lineTo(lx + tl, ry);
-    // BR
-    xhCtx.moveTo(rx, ry - tl); xhCtx.lineTo(rx, ry); xhCtx.lineTo(rx - tl, ry);
+    xhCtx.moveTo(lx+tl,ly); xhCtx.lineTo(lx,ly); xhCtx.lineTo(lx,ly+tl);
+    xhCtx.moveTo(rx-tl,ly); xhCtx.lineTo(rx,ly); xhCtx.lineTo(rx,ly+tl);
+    xhCtx.moveTo(lx,ry-tl); xhCtx.lineTo(lx,ry); xhCtx.lineTo(lx+tl,ry);
+    xhCtx.moveTo(rx,ry-tl); xhCtx.lineTo(rx,ry); xhCtx.lineTo(rx-tl,ry);
     xhCtx.stroke();
     xhCtx.restore();
   }
 
-  // --- Crosshair ---
+  // Crosshair
   if (mouseX > 0 && mouseX < W && mouseY > 0 && mouseY < H) {
     drawCrosshairAt(mouseX, mouseY);
   }
 
-  // --- Shoot flash ring ---
+  // Shoot flash ring
   if (shootFlash) {
-    const age = (Date.now() - shootFlash.t) / 220;
+    const age = (Date.now() - shootFlash.t) / 200;
     if (age >= 1) {
       shootFlash = null;
     } else {
       xhCtx.save();
-      xhCtx.globalAlpha  = 1 - age;
-      xhCtx.strokeStyle  = '#ffffff';
-      xhCtx.shadowColor  = '#00ffcc';
-      xhCtx.shadowBlur   = 18;
-      xhCtx.lineWidth    = 2;
+      xhCtx.globalAlpha = 1 - age;
+      xhCtx.strokeStyle = '#ffffff';
+      xhCtx.shadowColor = '#00ffcc';
+      xhCtx.shadowBlur  = 18;
+      xhCtx.lineWidth   = 2;
       xhCtx.beginPath();
-      xhCtx.arc(shootFlash.x, shootFlash.y, age * 55, 0, Math.PI * 2);
+      xhCtx.arc(shootFlash.x, shootFlash.y, age * 50, 0, Math.PI * 2);
       xhCtx.stroke();
       xhCtx.restore();
     }
@@ -439,13 +417,13 @@ function drawHudOverlay() {
 }
 
 function drawCrosshairAt(x, y) {
-  const color   = '#00ffcc';
-  const innerR  = 11;
-  const gap     = 5;
+  const color  = '#00ffcc';
+  const innerR = 11;
+  const gap    = 5;
   const lineLen = 22;
-  const tickW   = 7;
-  const outerR  = 42;
-  const rot     = (Date.now() / 7000) * Math.PI * 2;
+  const tickW  = 7;
+  const outerR = 42;
+  const rot    = (Date.now() / 7000) * Math.PI * 2;
 
   xhCtx.save();
   xhCtx.strokeStyle = color;
@@ -454,38 +432,32 @@ function drawCrosshairAt(x, y) {
   xhCtx.shadowBlur  = 10;
   xhCtx.lineCap     = 'square';
 
-  // Inner circle
   xhCtx.lineWidth = 1.5;
   xhCtx.beginPath();
   xhCtx.arc(x, y, innerR, 0, Math.PI * 2);
   xhCtx.stroke();
 
-  // Center dot
   xhCtx.beginPath();
   xhCtx.arc(x, y, 1.5, 0, Math.PI * 2);
   xhCtx.fill();
 
-  // 4 crosshair lines with gap from circle
-  const ir = innerR + gap;
-  const or = innerR + gap + lineLen;
+  const ir = innerR + gap, or = innerR + gap + lineLen;
   xhCtx.lineWidth = 1.5;
   xhCtx.beginPath();
-  xhCtx.moveTo(x,      y - ir); xhCtx.lineTo(x,      y - or);
-  xhCtx.moveTo(x,      y + ir); xhCtx.lineTo(x,      y + or);
-  xhCtx.moveTo(x - ir, y     ); xhCtx.lineTo(x - or, y     );
-  xhCtx.moveTo(x + ir, y     ); xhCtx.lineTo(x + or, y     );
+  xhCtx.moveTo(x,    y-ir); xhCtx.lineTo(x,    y-or);
+  xhCtx.moveTo(x,    y+ir); xhCtx.lineTo(x,    y+or);
+  xhCtx.moveTo(x-ir, y   ); xhCtx.lineTo(x-or, y   );
+  xhCtx.moveTo(x+ir, y   ); xhCtx.lineTo(x+or, y   );
   xhCtx.stroke();
 
-  // End ticks
   xhCtx.lineWidth = 2;
   xhCtx.beginPath();
-  xhCtx.moveTo(x - tickW/2, y - or); xhCtx.lineTo(x + tickW/2, y - or);
-  xhCtx.moveTo(x - tickW/2, y + or); xhCtx.lineTo(x + tickW/2, y + or);
-  xhCtx.moveTo(x - or, y - tickW/2); xhCtx.lineTo(x - or, y + tickW/2);
-  xhCtx.moveTo(x + or, y - tickW/2); xhCtx.lineTo(x + or, y + tickW/2);
+  xhCtx.moveTo(x-tickW/2, y-or); xhCtx.lineTo(x+tickW/2, y-or);
+  xhCtx.moveTo(x-tickW/2, y+or); xhCtx.lineTo(x+tickW/2, y+or);
+  xhCtx.moveTo(x-or, y-tickW/2); xhCtx.lineTo(x-or, y+tickW/2);
+  xhCtx.moveTo(x+or, y-tickW/2); xhCtx.lineTo(x+or, y+tickW/2);
   xhCtx.stroke();
 
-  // 4 rotating outer arc brackets
   xhCtx.lineWidth = 1.5;
   xhCtx.shadowBlur = 8;
   const arc = Math.PI / 5;
@@ -495,29 +467,37 @@ function drawCrosshairAt(x, y) {
     xhCtx.arc(x, y, outerR, a, a + arc);
     xhCtx.stroke();
   }
-
   xhCtx.restore();
 }
 
-// === INPUT ===
-window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
-window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
-
-document.addEventListener('click', () => {
+// === AUTOFIRE — hold mouse to spam pew pew pew ===
+function fireShot() {
   playPew();
   shootFlash = { x: mouseX, y: mouseY, t: Date.now() };
 
-  // Find nearest target within HIT_RADIUS
-  let nearest = null, nearestDist = HIT_RADIUS;
+  let nearest = null, nearestD = HIT_RADIUS;
   for (const t of targets) {
     if (t.dead) continue;
-    const cx = t.x + t.w / 2;
-    const cy = t.y + (t.h || t.w) / 2;
-    const d  = Math.hypot(mouseX - cx, mouseY - cy);
-    if (d < nearestDist) { nearestDist = d; nearest = t; }
+    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
+    if (d < nearestD) { nearestD = d; nearest = t; }
   }
   if (nearest) shootTarget(nearest);
+}
+
+document.addEventListener('mousedown', e => {
+  if (e.button !== 0 || e.target.closest('button')) return;
+  fireShot();
+  autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
 });
+
+document.addEventListener('mouseup', e => {
+  if (e.button !== 0) return;
+  clearInterval(autoFireTimer);
+  autoFireTimer = null;
+});
+
+window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
+window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
 
 window.addEventListener('resize', () => {
   initStars();
@@ -543,7 +523,12 @@ fetch('media/manifest.json')
     requestAnimationFrame(loop);
   });
 
-// === SPAWN — enters from a random screen edge ===
+// === SPAWN — perspective: starts tiny in the distance, flies toward camera ===
+//
+// Each target lives in "world space" with an offset (wx, wy) from screen center
+// and a depth z that decreases toward 0.  Screen position = center + offset/z,
+// display size = baseSize/z.  So targets appear small & centered when far,
+// then grow and drift outward as they approach, flying past the view screen.
 function spawnTarget() {
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
@@ -554,45 +539,53 @@ function spawnTarget() {
   const ext    = file.split('.').pop().toLowerCase();
   const isVideo = ext === 'mp4' || ext === 'webm' || ext === 'mov';
 
-  const W    = window.innerWidth, H = window.innerHeight;
-  const w    = 145 + Math.random() * 110;
-  const spd  = 1.6 + Math.random() * 1.8;
-  const edge = Math.floor(Math.random() * 4); // 0=L, 1=R, 2=T, 3=B
+  const W = window.innerWidth, H = window.innerHeight;
 
-  let x, y, dx, dy;
-  switch (edge) {
-    case 0: x = -(w + 30); y = Math.random() * H;
-            dx =  spd * (0.55 + Math.random() * 0.6); dy = (Math.random() - 0.5) * spd; break;
-    case 1: x = W + 30;    y = Math.random() * H;
-            dx = -spd * (0.55 + Math.random() * 0.6); dy = (Math.random() - 0.5) * spd; break;
-    case 2: x = Math.random() * W; y = -(w + 30);
-            dx = (Math.random() - 0.5) * spd; dy =  spd * (0.55 + Math.random() * 0.6); break;
-    case 3: x = Math.random() * W; y = H + 30;
-            dx = (Math.random() - 0.5) * spd; dy = -spd * (0.55 + Math.random() * 0.6); break;
-  }
+  // World-space offset from screen center — determines which direction it flies past
+  const wx = (Math.random() - 0.5) * W * 0.9;
+  const wy = (Math.random() - 0.5) * H * 0.7;
 
-  const rot      = -20 + Math.random() * 40;
-  const rotSpeed = -0.15 + Math.random() * 0.30;
+  const z        = 3.0 + Math.random() * 2.0;    // start far away
+  const zSpeed   = 0.013 + Math.random() * 0.011; // approach speed
+  const baseSize = 220 + Math.random() * 160;     // size at z=1
+
+  const rot      = (Math.random() - 0.5) * 30;
+  const rotSpeed = (Math.random() - 0.5) * 0.12;
+
+  // Initial screen position (tiny, near center)
+  const initDisplaySize = baseSize / z;
+  const initSX = W / 2 + wx / z;
+  const initSY = H / 2 + wy / z;
 
   const el = document.createElement('div');
   el.className = 'target';
-  el.style.cssText = `width:${w}px;left:${x}px;top:${y}px;transform:rotate(${rot}deg)`;
+  el.style.cssText = `width:${initDisplaySize}px;left:${initSX - initDisplaySize/2}px;top:${initSY - initDisplaySize/2}px;transform:rotate(${rot}deg)`;
 
-  const target = { el, x, y, file, dx, dy, w, h: w, rot, rotSpeed, dead: false };
+  const target = {
+    el, file, isVideo,
+    wx, wy, z, zSpeed, baseSize,
+    hRatio: 1,
+    rot, rotSpeed,
+    dead: false,
+    // screen-space cache (updated every frame, used for hit detection & shootTarget)
+    screenX: initSX, screenY: initSY,
+    x: initSX - initDisplaySize/2, y: initSY - initDisplaySize/2,
+    w: initDisplaySize, h: initDisplaySize,
+  };
 
   if (isVideo) {
     const vid = document.createElement('video');
     vid.autoplay = true; vid.muted = true; vid.loop = true; vid.playsInline = true;
-    vid.style.cssText = 'display:block;width:100%;';
+    vid.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain;';
     vid.src = MEDIA_DIR + encodeURIComponent(file);
     vid.addEventListener('loadedmetadata', () => {
-      if (vid.videoWidth > 0) { target.h = w * (vid.videoHeight / vid.videoWidth); el.style.height = target.h + 'px'; }
+      if (vid.videoWidth > 0) target.hRatio = vid.videoHeight / vid.videoWidth;
     }, { once: true });
     el.appendChild(vid);
   } else {
     const img = document.createElement('img');
     img.alt = ''; img.loading = 'lazy';
-    img.onload = () => { if (img.naturalWidth > 0) target.h = w * (img.naturalHeight / img.naturalWidth); };
+    img.onload = () => { if (img.naturalWidth > 0) target.hRatio = img.naturalHeight / img.naturalWidth; };
     img.src = MEDIA_DIR + encodeURIComponent(file);
     el.appendChild(img);
   }
@@ -621,6 +614,8 @@ function shootTarget(target) {
   el.style.position      = 'fixed';
   el.style.left          = target.x + 'px';
   el.style.top           = target.y + 'px';
+  el.style.width         = target.w + 'px';
+  el.style.height        = target.isVideo ? target.h + 'px' : 'auto';
   el.style.pointerEvents = 'none';
   el.style.zIndex        = '30';
   document.body.appendChild(el);
@@ -631,8 +626,8 @@ function shootTarget(target) {
   requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
   target._overlay = overlay;
 
-  const dx    = W / 2 - (target.x + target.w / 2);
-  const dy    = H / 2 - (target.y + target.h / 2);
+  const dx    = W / 2 - target.screenX;
+  const dy    = H / 2 - target.screenY;
   const scale = Math.min(W * 0.72, H * 0.72) / target.w;
   target._dx    = dx;
   target._dy    = dy;
@@ -657,52 +652,67 @@ function loop() {
   drawWarp();
   drawHudOverlay();
 
-  let totalSpeed = 0;
-  let activeCount = 0;
+  let totalSpeed = 0, activeCount = 0;
 
   for (let i = targets.length - 1; i >= 0; i--) {
     const t = targets[i];
     if (t.dead) continue;
 
-    // Flee from cursor
-    const fx   = mouseX - (t.x + t.w / 2);
-    const fy   = mouseY - (t.y + (t.h || t.w) / 2);
+    // Advance toward camera
+    t.z -= t.zSpeed;
+
+    // Compute current screen position & size
+    const displaySize = t.baseSize / t.z;
+    const dispH       = displaySize * (t.hRatio || 1);
+    const sx          = W / 2 + t.wx / t.z;
+    const sy          = H / 2 + t.wy / t.z;
+
+    // Flee: push target away in world space when cursor is close on screen
+    const fx   = mouseX - sx;
+    const fy   = mouseY - sy;
     const dist = Math.sqrt(fx * fx + fy * fy);
     if (dist < FLEE_RADIUS && dist > 0) {
       const force = ((FLEE_RADIUS - dist) / FLEE_RADIUS) * FLEE_FORCE;
-      t.dx -= (fx / dist) * force;
-      t.dy -= (fy / dist) * force;
+      t.wx -= (fx / dist) * force * t.z;
+      t.wy -= (fy / dist) * force * t.z;
     }
 
-    t.dx *= DAMPING;
-    t.dy *= DAMPING;
-    const spd = Math.sqrt(t.dx * t.dx + t.dy * t.dy);
-    if (spd > MAX_SPEED) { t.dx = t.dx / spd * MAX_SPEED; t.dy = t.dy / spd * MAX_SPEED; }
+    // Clamp drift so targets don't flee completely off-axis
+    const maxOffset = Math.max(W, H) * 1.5;
+    t.wx = Math.max(-maxOffset, Math.min(maxOffset, t.wx));
+    t.wy = Math.max(-maxOffset, Math.min(maxOffset, t.wy));
 
-    t.x   += t.dx;
-    t.y   += t.dy;
     t.rot += t.rotSpeed;
 
-    // Remove when far off-screen, spawn replacement
-    const cx = t.x + t.w / 2;
-    const cy = t.y + (t.h || t.w) / 2;
-    if (cx < -280 || cx > W + 280 || cy < -280 || cy > H + 280) {
+    // Cache for hit detection and shootTarget
+    t.screenX = sx;
+    t.screenY = sy;
+    t.x = sx - displaySize / 2;
+    t.y = sy - dispH / 2;
+    t.w = displaySize;
+    t.h = dispH;
+
+    // Remove when past the camera or screen center is far off-screen
+    if (t.z < 0.1 || sx < -500 || sx > W + 500 || sy < -500 || sy > H + 500) {
       t.el.remove();
       targets.splice(i, 1);
-      setTimeout(spawnTarget, 200 + Math.random() * 500);
+      setTimeout(spawnTarget, 150 + Math.random() * 400);
       continue;
     }
 
-    totalSpeed += spd;
+    totalSpeed += t.zSpeed * 100; // proxy speed readout
     activeCount++;
 
-    t.el.style.left = t.x + 'px';
-    t.el.style.top  = t.y + 'px';
+    // z-index: closer targets draw on top of distant ones
+    t.el.style.zIndex   = Math.min(20, Math.max(1, Math.round(8 / t.z)));
+    t.el.style.width    = displaySize + 'px';
+    if (t.isVideo) t.el.style.height = dispH + 'px';
+    t.el.style.left     = t.x + 'px';
+    t.el.style.top      = t.y + 'px';
     t.el.style.transform = `rotate(${t.rot}deg)`;
     t.el.style.setProperty('--rot', t.rot + 'deg');
   }
 
-  // HUD readouts
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
 
