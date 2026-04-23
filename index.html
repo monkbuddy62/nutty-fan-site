@@ -4,23 +4,48 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PNUT SUX NUTS</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 
 <canvas id="stars"></canvas>
+<canvas id="crosshairCanvas"></canvas>
+
+<div id="gameArea"></div>
 
 <div id="hud">
-  <div id="hud-title">PNUT SUX NUTS</div>
-  <div id="hud-right">
-    <span id="streak-display"></span>
-    <span id="score-display">KILLS: <span id="scoreVal">0</span></span>
-    <button id="muteBtn" class="mute-btn" title="Toggle sound">🔊</button>
+  <div id="hud-top">
+    <div id="hud-title">◈ PNUT SUX NUTS ◈</div>
+    <div id="hud-top-right">
+      <span id="streak-display"></span>
+      <button id="muteBtn" class="mute-btn" title="Toggle sound">🔊</button>
+    </div>
+  </div>
+
+  <div id="hud-bottom">
+    <div class="hud-cell">
+      <div class="hud-lbl">KILLS</div>
+      <div class="hud-val" id="scoreVal">000</div>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-cell">
+      <div class="hud-lbl">TARGETS</div>
+      <div class="hud-val" id="targetsVal">00</div>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-cell">
+      <div class="hud-lbl">SPEED</div>
+      <div class="hud-val" id="speedVal">0.0</div>
+    </div>
+    <div class="hud-sep"></div>
+    <div class="hud-cell">
+      <div class="hud-lbl">WPNS</div>
+      <div class="hud-val hud-armed">ARMED</div>
+    </div>
   </div>
 </div>
 
-<div id="gameArea"></div>
-<div id="buildId">build 10</div>
+<div id="buildId">build 11</div>
 
 <div id="loadingScreen">
   <div class="loading-inner">
@@ -29,6 +54,6 @@
   </div>
 </div>
 
-<script src="script.js"></script>
+<script src="script.js?v=11"></script>
 </body>
 </html>

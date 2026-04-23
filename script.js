@@ -2,11 +2,11 @@ const AUDIO_DIR   = 'audio/';
 const MEDIA_DIR   = 'media/';
 const IS_MOBILE     = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
 const MAX_ON_SCREEN = IS_MOBILE ? 6 : 12;
-const BASE_SPEED  = 0.55;
-const MAX_SPEED   = 7;
-const FLEE_RADIUS = 230;
-const FLEE_FORCE  = 4.5;
-const DAMPING     = 0.97;
+const MAX_SPEED     = 8;
+const FLEE_RADIUS   = 140;
+const FLEE_FORCE    = 2.8;
+const DAMPING       = 0.985;
+const HIT_RADIUS    = 110;  // px from cursor center to count as a hit
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -50,14 +50,27 @@ let mouseX       = -9999;
 let mouseY       = -9999;
 let audioCtx     = null;
 let currentClip  = null;
+let shootFlash   = null;   // { x, y, t } — expanding ring on click
 
 // === DOM ===
 const gameArea      = document.getElementById('gameArea');
 const scoreVal      = document.getElementById('scoreVal');
+const targetsValEl  = document.getElementById('targetsVal');
+const speedValEl    = document.getElementById('speedVal');
 const loadingScreen = document.getElementById('loadingScreen');
 const loadingText   = document.getElementById('loadingText');
 const streakDisp    = document.getElementById('streak-display');
 const muteBtn       = document.getElementById('muteBtn');
+
+// === CROSSHAIR CANVAS ===
+const xhCanvas = document.getElementById('crosshairCanvas');
+const xhCtx    = xhCanvas.getContext('2d');
+
+function resizeXhCanvas() {
+  xhCanvas.width  = window.innerWidth;
+  xhCanvas.height = window.innerHeight;
+}
+resizeXhCanvas();
 
 // === AUDIO ===
 function getCtx() {
@@ -150,7 +163,6 @@ function explodeDust(cx, cy) {
       opacity: '1',
     }, Math.cos(angle) * dist, Math.sin(angle) * dist, dur, 0);
   }
-  // Extra fine specks
   for (let i = 0; i < 20; i++) {
     const angle = Math.random() * Math.PI * 2;
     const dist  = 30 + Math.random() * 80;
@@ -165,7 +177,7 @@ function explodeDust(cx, cy) {
 }
 
 function explodeStars(cx, cy) {
-  const colors = ['#ffcc44', '#ff006e', '#c8aaff', '#44eeff', '#ffffff', '#ffaa00'];
+  const colors  = ['#ffcc44', '#ff006e', '#00ffcc', '#44eeff', '#ffffff', '#ffaa00'];
   const symbols = ['✦', '★', '✸', '✺', '✷', '⬟'];
   for (let i = 0; i < 18; i++) {
     const angle = (i / 18) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
@@ -186,12 +198,11 @@ function explodeStars(cx, cy) {
     }, Math.cos(angle) * dist, Math.sin(angle) * dist, dur, 0);
     p.textContent = sym;
   }
-  // Central flash
   const flash = document.createElement('div');
   Object.assign(flash.style, {
     position: 'fixed', left: cx + 'px', top: cy + 'px',
     width: '80px', height: '80px',
-    background: 'radial-gradient(circle, rgba(255,220,80,0.9) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, rgba(0,255,200,0.85) 0%, transparent 70%)',
     borderRadius: '50%',
     transform: 'translate(-50%,-50%) scale(0)',
     pointerEvents: 'none', zIndex: '199',
@@ -213,7 +224,6 @@ function explodeShatter(target) {
   const cols = 3, rows = 2;
   const pw = rect.width  / cols;
   const ph = rect.height / rows;
-  // Use actual rendered dimensions for background-size
   const bw = rect.width;
   const bh = rect.height;
 
@@ -222,12 +232,10 @@ function explodeShatter(target) {
       const piece = document.createElement('div');
       const px = rect.left + c * pw;
       const py = rect.top  + r * ph;
-
       const flyX = (c - cols/2 + 0.5) * (120 + Math.random() * 200);
       const flyY = (r - rows/2 + 0.5) * (120 + Math.random() * 200) + 60;
       const rot  = -200 + Math.random() * 400;
       const dur  = 0.55 + Math.random() * 0.25;
-
       Object.assign(piece.style, {
         position: 'fixed',
         left: px + 'px', top: py + 'px',
@@ -241,7 +249,6 @@ function explodeShatter(target) {
         opacity: '1',
       });
       document.body.appendChild(piece);
-
       requestAnimationFrame(() => requestAnimationFrame(() => {
         piece.style.transform = `translate(${flyX}px, ${flyY}px) rotate(${rot}deg)`;
         piece.style.opacity = '0';
@@ -259,25 +266,21 @@ function triggerExplosion(target) {
   const cx   = rect.left + rect.width  / 2;
   const cy   = rect.top  + rect.height / 2;
 
-  // Dismiss overlay
   if (target._overlay) {
     target._overlay.style.opacity = '0';
     setTimeout(() => target._overlay.remove(), 500);
   }
 
-  // Particles at screen center where photo is hovering
   const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
   if (style === 'dust')         explodeDust(cx, cy);
   else if (style === 'stars')   explodeStars(cx, cy);
   else if (style === 'shatter') explodeShatter(target);
 
-  // Screen flash
   const flash = document.createElement('div');
   flash.className = 'kill-flash';
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 220);
 
-  // Collapse in place (JS transition, not CSS class)
   const finalRot = -180 + Math.random() * 360;
   el.style.transition = 'transform 0.4s ease-in, opacity 0.35s ease-in';
   el.style.transform  = `translate(${target._dx}px, ${target._dy}px) rotate(${finalRot}deg) scale(0.03)`;
@@ -334,25 +337,192 @@ function drawWarp() {
     sctx.beginPath();
     sctx.moveTo(spx, spy);
     sctx.lineTo(sx, sy);
-    sctx.strokeStyle = `rgba(210,200,255,${brightness})`;
+    sctx.strokeStyle = `rgba(180,240,230,${brightness})`;
     sctx.lineWidth = thickness;
     sctx.stroke();
   }
 }
 
-window.addEventListener('resize', () => {
-  initStars();
-  const W = window.innerWidth, H = window.innerHeight;
-  targets.forEach(t => {
-    if (t.x + t.w > W) t.x = W - t.w;
-    if (t.y + t.h > H) t.y = H - t.h;
-  });
-});
+// === HUD OVERLAY + CROSSHAIR ===
+
+function drawHudOverlay() {
+  const W = xhCanvas.width, H = xhCanvas.height;
+  xhCtx.clearRect(0, 0, W, H);
+
+  // --- Corner brackets ---
+  const bSize = 64, m = 18;
+  xhCtx.save();
+  xhCtx.strokeStyle = '#00ffcc';
+  xhCtx.lineWidth = 2;
+  xhCtx.shadowColor = '#00ffcc';
+  xhCtx.shadowBlur = 12;
+  xhCtx.lineCap = 'square';
+  xhCtx.beginPath();
+  // top-left
+  xhCtx.moveTo(m + bSize, m);
+  xhCtx.lineTo(m, m);
+  xhCtx.lineTo(m, m + bSize);
+  // top-right
+  xhCtx.moveTo(W - m - bSize, m);
+  xhCtx.lineTo(W - m, m);
+  xhCtx.lineTo(W - m, m + bSize);
+  // bottom-left
+  xhCtx.moveTo(m, H - m - bSize);
+  xhCtx.lineTo(m, H - m);
+  xhCtx.lineTo(m + bSize, H - m);
+  // bottom-right
+  xhCtx.moveTo(W - m, H - m - bSize);
+  xhCtx.lineTo(W - m, H - m);
+  xhCtx.lineTo(W - m - bSize, H - m);
+  xhCtx.stroke();
+  xhCtx.restore();
+
+  // --- Targeting brackets around nearest in-range target ---
+  let lockedTarget = null;
+  let nearestDist  = HIT_RADIUS;
+  for (const t of targets) {
+    if (t.dead) continue;
+    const cx = t.x + t.w / 2;
+    const cy = t.y + (t.h || t.w) / 2;
+    const d  = Math.hypot(mouseX - cx, mouseY - cy);
+    if (d < nearestDist) { nearestDist = d; lockedTarget = t; }
+  }
+
+  if (lockedTarget) {
+    const rect = lockedTarget.el.getBoundingClientRect();
+    const pad = 12, tl = 20;
+    const lx = rect.left - pad, ly = rect.top - pad;
+    const rx = rect.right + pad, ry = rect.bottom + pad;
+
+    xhCtx.save();
+    xhCtx.strokeStyle = '#ff6600';
+    xhCtx.shadowColor = '#ff6600';
+    xhCtx.shadowBlur  = 14;
+    xhCtx.lineWidth   = 1.5;
+    xhCtx.lineCap     = 'square';
+    xhCtx.beginPath();
+    // TL
+    xhCtx.moveTo(lx + tl, ly); xhCtx.lineTo(lx, ly); xhCtx.lineTo(lx, ly + tl);
+    // TR
+    xhCtx.moveTo(rx - tl, ly); xhCtx.lineTo(rx, ly); xhCtx.lineTo(rx, ly + tl);
+    // BL
+    xhCtx.moveTo(lx, ry - tl); xhCtx.lineTo(lx, ry); xhCtx.lineTo(lx + tl, ry);
+    // BR
+    xhCtx.moveTo(rx, ry - tl); xhCtx.lineTo(rx, ry); xhCtx.lineTo(rx - tl, ry);
+    xhCtx.stroke();
+    xhCtx.restore();
+  }
+
+  // --- Crosshair ---
+  if (mouseX > 0 && mouseX < W && mouseY > 0 && mouseY < H) {
+    drawCrosshairAt(mouseX, mouseY);
+  }
+
+  // --- Shoot flash ring ---
+  if (shootFlash) {
+    const age = (Date.now() - shootFlash.t) / 220;
+    if (age >= 1) {
+      shootFlash = null;
+    } else {
+      xhCtx.save();
+      xhCtx.globalAlpha  = 1 - age;
+      xhCtx.strokeStyle  = '#ffffff';
+      xhCtx.shadowColor  = '#00ffcc';
+      xhCtx.shadowBlur   = 18;
+      xhCtx.lineWidth    = 2;
+      xhCtx.beginPath();
+      xhCtx.arc(shootFlash.x, shootFlash.y, age * 55, 0, Math.PI * 2);
+      xhCtx.stroke();
+      xhCtx.restore();
+    }
+  }
+}
+
+function drawCrosshairAt(x, y) {
+  const color   = '#00ffcc';
+  const innerR  = 11;
+  const gap     = 5;
+  const lineLen = 22;
+  const tickW   = 7;
+  const outerR  = 42;
+  const rot     = (Date.now() / 7000) * Math.PI * 2;
+
+  xhCtx.save();
+  xhCtx.strokeStyle = color;
+  xhCtx.fillStyle   = color;
+  xhCtx.shadowColor = color;
+  xhCtx.shadowBlur  = 10;
+  xhCtx.lineCap     = 'square';
+
+  // Inner circle
+  xhCtx.lineWidth = 1.5;
+  xhCtx.beginPath();
+  xhCtx.arc(x, y, innerR, 0, Math.PI * 2);
+  xhCtx.stroke();
+
+  // Center dot
+  xhCtx.beginPath();
+  xhCtx.arc(x, y, 1.5, 0, Math.PI * 2);
+  xhCtx.fill();
+
+  // 4 crosshair lines with gap from circle
+  const ir = innerR + gap;
+  const or = innerR + gap + lineLen;
+  xhCtx.lineWidth = 1.5;
+  xhCtx.beginPath();
+  xhCtx.moveTo(x,      y - ir); xhCtx.lineTo(x,      y - or);
+  xhCtx.moveTo(x,      y + ir); xhCtx.lineTo(x,      y + or);
+  xhCtx.moveTo(x - ir, y     ); xhCtx.lineTo(x - or, y     );
+  xhCtx.moveTo(x + ir, y     ); xhCtx.lineTo(x + or, y     );
+  xhCtx.stroke();
+
+  // End ticks
+  xhCtx.lineWidth = 2;
+  xhCtx.beginPath();
+  xhCtx.moveTo(x - tickW/2, y - or); xhCtx.lineTo(x + tickW/2, y - or);
+  xhCtx.moveTo(x - tickW/2, y + or); xhCtx.lineTo(x + tickW/2, y + or);
+  xhCtx.moveTo(x - or, y - tickW/2); xhCtx.lineTo(x - or, y + tickW/2);
+  xhCtx.moveTo(x + or, y - tickW/2); xhCtx.lineTo(x + or, y + tickW/2);
+  xhCtx.stroke();
+
+  // 4 rotating outer arc brackets
+  xhCtx.lineWidth = 1.5;
+  xhCtx.shadowBlur = 8;
+  const arc = Math.PI / 5;
+  for (let i = 0; i < 4; i++) {
+    const a = rot + (i / 4) * Math.PI * 2;
+    xhCtx.beginPath();
+    xhCtx.arc(x, y, outerR, a, a + arc);
+    xhCtx.stroke();
+  }
+
+  xhCtx.restore();
+}
 
 // === INPUT ===
 window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
-gameArea.addEventListener('click', () => playPew());
+
+document.addEventListener('click', () => {
+  playPew();
+  shootFlash = { x: mouseX, y: mouseY, t: Date.now() };
+
+  // Find nearest target within HIT_RADIUS
+  let nearest = null, nearestDist = HIT_RADIUS;
+  for (const t of targets) {
+    if (t.dead) continue;
+    const cx = t.x + t.w / 2;
+    const cy = t.y + (t.h || t.w) / 2;
+    const d  = Math.hypot(mouseX - cx, mouseY - cy);
+    if (d < nearestDist) { nearestDist = d; nearest = t; }
+  }
+  if (nearest) shootTarget(nearest);
+});
+
+window.addEventListener('resize', () => {
+  initStars();
+  resizeXhCanvas();
+});
 
 // === LOAD & START ===
 fetch('media/manifest.json')
@@ -368,43 +538,47 @@ fetch('media/manifest.json')
     loadingText.textContent = 'Add files to media/ and run build-manifest.py';
     loadingText.style.animationName = 'none';
     loadingText.style.opacity = '1';
-    loadingText.style.color = '#c8aaff';
+    loadingText.style.color = '#00ffcc';
     initStars();
     requestAnimationFrame(loop);
   });
 
-// === SPAWN ===
+// === SPAWN — enters from a random screen edge ===
 function spawnTarget() {
-  if (!mediaFiles.length) return;
+  if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
-  const active  = new Set(targets.map(t => t.file));
-  const pool    = mediaFiles.filter(f => !active.has(f));
-  const src     = pool.length ? pool : mediaFiles;
-  const file    = src[Math.floor(Math.random() * src.length)];
-  const ext     = file.split('.').pop().toLowerCase();
+  const active = new Set(targets.map(t => t.file));
+  const pool   = mediaFiles.filter(f => !active.has(f));
+  const src    = pool.length ? pool : mediaFiles;
+  const file   = src[Math.floor(Math.random() * src.length)];
+  const ext    = file.split('.').pop().toLowerCase();
   const isVideo = ext === 'mp4' || ext === 'webm' || ext === 'mov';
 
-  const W = window.innerWidth, H = window.innerHeight;
-  const w = 150 + Math.random() * 110;
-  const x = Math.random() * Math.max(1, W - w);
-  const y = Math.random() * Math.max(1, H - w);
+  const W    = window.innerWidth, H = window.innerHeight;
+  const w    = 145 + Math.random() * 110;
+  const spd  = 1.6 + Math.random() * 1.8;
+  const edge = Math.floor(Math.random() * 4); // 0=L, 1=R, 2=T, 3=B
 
-  const spd      = BASE_SPEED + Math.random() * 0.7;
-  const angle    = Math.random() * Math.PI * 2;
-  const rot      = -15 + Math.random() * 30;
-  const rotSpeed = -0.18 + Math.random() * 0.36;
+  let x, y, dx, dy;
+  switch (edge) {
+    case 0: x = -(w + 30); y = Math.random() * H;
+            dx =  spd * (0.55 + Math.random() * 0.6); dy = (Math.random() - 0.5) * spd; break;
+    case 1: x = W + 30;    y = Math.random() * H;
+            dx = -spd * (0.55 + Math.random() * 0.6); dy = (Math.random() - 0.5) * spd; break;
+    case 2: x = Math.random() * W; y = -(w + 30);
+            dx = (Math.random() - 0.5) * spd; dy =  spd * (0.55 + Math.random() * 0.6); break;
+    case 3: x = Math.random() * W; y = H + 30;
+            dx = (Math.random() - 0.5) * spd; dy = -spd * (0.55 + Math.random() * 0.6); break;
+  }
+
+  const rot      = -20 + Math.random() * 40;
+  const rotSpeed = -0.15 + Math.random() * 0.30;
 
   const el = document.createElement('div');
   el.className = 'target';
-  el.style.cssText = `width:${w}px;left:${x}px;top:${y}px;--rot:${rot}deg;transform:rotate(${rot}deg)`;
+  el.style.cssText = `width:${w}px;left:${x}px;top:${y}px;transform:rotate(${rot}deg)`;
 
-  const target = {
-    el, x, y, file,
-    dx: Math.cos(angle) * spd,
-    dy: Math.sin(angle) * spd,
-    w, h: w,
-    rot, rotSpeed, dead: false,
-  };
+  const target = { el, x, y, file, dx, dy, w, h: w, rot, rotSpeed, dead: false };
 
   if (isVideo) {
     const vid = document.createElement('video');
@@ -412,63 +586,51 @@ function spawnTarget() {
     vid.style.cssText = 'display:block;width:100%;';
     vid.src = MEDIA_DIR + encodeURIComponent(file);
     vid.addEventListener('loadedmetadata', () => {
-      if (vid.videoWidth > 0) {
-        target.h = w * (vid.videoHeight / vid.videoWidth);
-        el.style.height = target.h + 'px';
-      }
+      if (vid.videoWidth > 0) { target.h = w * (vid.videoHeight / vid.videoWidth); el.style.height = target.h + 'px'; }
     }, { once: true });
     el.appendChild(vid);
   } else {
     const img = document.createElement('img');
     img.alt = ''; img.loading = 'lazy';
-    img.onload = () => {
-      if (img.naturalWidth > 0) target.h = w * (img.naturalHeight / img.naturalWidth);
-    };
+    img.onload = () => { if (img.naturalWidth > 0) target.h = w * (img.naturalHeight / img.naturalWidth); };
     img.src = MEDIA_DIR + encodeURIComponent(file);
     el.appendChild(img);
   }
 
   targets.push(target);
   gameArea.appendChild(el);
-  el.addEventListener('click', e => { e.stopPropagation(); shootTarget(target); });
 }
 
-// === SHOOT — fly to center, hold, then explode ===
+// === SHOOT — fly to center, hold, explode ===
 function shootTarget(target) {
   if (target.dead) return;
   target.dead = true;
   targets.splice(targets.indexOf(target), 1);
 
   score++;
-  scoreVal.textContent = score;
+  scoreVal.textContent = String(score).padStart(3, '0');
 
   const now = Date.now();
   killStreak   = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
   lastKillTime = now;
   if (killStreak >= 3) showStreakPopup(killStreak);
 
-  playPew();
-
   const el = target.el;
-  const W  = window.innerWidth;
-  const H  = window.innerHeight;
+  const W  = window.innerWidth, H = window.innerHeight;
 
-  // Move element to body so it shares stacking context with overlay
-  el.style.position   = 'fixed';
-  el.style.left       = target.x + 'px';
-  el.style.top        = target.y + 'px';
+  el.style.position      = 'fixed';
+  el.style.left          = target.x + 'px';
+  el.style.top           = target.y + 'px';
   el.style.pointerEvents = 'none';
-  el.style.zIndex     = '30';
+  el.style.zIndex        = '30';
   document.body.appendChild(el);
 
-  // Dim overlay so photo stands out — z-index 25, below target's 30
   const overlay = document.createElement('div');
   overlay.className = 'kill-overlay';
   document.body.appendChild(overlay);
   requestAnimationFrame(() => requestAnimationFrame(() => { overlay.style.opacity = '1'; }));
   target._overlay = overlay;
 
-  // Transform needed to move center of element to screen center, upright, big
   const dx    = W / 2 - (target.x + target.w / 2);
   const dy    = H / 2 - (target.y + target.h / 2);
   const scale = Math.min(W * 0.72, H * 0.72) / target.w;
@@ -476,13 +638,11 @@ function shootTarget(target) {
   target._dy    = dy;
   target._scale = scale;
 
-  // Fly to center
   el.style.transition = 'transform 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
   requestAnimationFrame(() => requestAnimationFrame(() => {
     el.style.transform = `translate(${dx}px, ${dy}px) rotate(0deg) scale(${scale})`;
   }));
 
-  // Hold for 2.8s after fly-in (0.7s), then explode
   setTimeout(() => {
     playBoom();
     playNuttyClip();
@@ -495,13 +655,18 @@ function loop() {
   const W = window.innerWidth, H = window.innerHeight;
 
   drawWarp();
+  drawHudOverlay();
 
-  for (const t of targets) {
+  let totalSpeed = 0;
+  let activeCount = 0;
+
+  for (let i = targets.length - 1; i >= 0; i--) {
+    const t = targets[i];
     if (t.dead) continue;
 
     // Flee from cursor
     const fx   = mouseX - (t.x + t.w / 2);
-    const fy   = mouseY - (t.y + t.h / 2);
+    const fy   = mouseY - (t.y + (t.h || t.w) / 2);
     const dist = Math.sqrt(fx * fx + fy * fy);
     if (dist < FLEE_RADIUS && dist > 0) {
       const force = ((FLEE_RADIUS - dist) / FLEE_RADIUS) * FLEE_FORCE;
@@ -512,23 +677,34 @@ function loop() {
     t.dx *= DAMPING;
     t.dy *= DAMPING;
     const spd = Math.sqrt(t.dx * t.dx + t.dy * t.dy);
-    if (spd < BASE_SPEED && spd > 0) { t.dx = t.dx / spd * BASE_SPEED; t.dy = t.dy / spd * BASE_SPEED; }
-    if (spd > MAX_SPEED)             { t.dx = t.dx / spd * MAX_SPEED;   t.dy = t.dy / spd * MAX_SPEED; }
+    if (spd > MAX_SPEED) { t.dx = t.dx / spd * MAX_SPEED; t.dy = t.dy / spd * MAX_SPEED; }
 
     t.x   += t.dx;
     t.y   += t.dy;
     t.rot += t.rotSpeed;
 
-    if (t.x <= 0)       { t.dx =  Math.abs(t.dx); t.x = 0; }
-    if (t.x + t.w >= W) { t.dx = -Math.abs(t.dx); t.x = W - t.w; }
-    if (t.y <= 0)       { t.dy =  Math.abs(t.dy); t.y = 0; }
-    if (t.y + t.h >= H) { t.dy = -Math.abs(t.dy); t.y = H - t.h; }
+    // Remove when far off-screen, spawn replacement
+    const cx = t.x + t.w / 2;
+    const cy = t.y + (t.h || t.w) / 2;
+    if (cx < -280 || cx > W + 280 || cy < -280 || cy > H + 280) {
+      t.el.remove();
+      targets.splice(i, 1);
+      setTimeout(spawnTarget, 200 + Math.random() * 500);
+      continue;
+    }
+
+    totalSpeed += spd;
+    activeCount++;
 
     t.el.style.left = t.x + 'px';
     t.el.style.top  = t.y + 'px';
     t.el.style.transform = `rotate(${t.rot}deg)`;
     t.el.style.setProperty('--rot', t.rot + 'deg');
   }
+
+  // HUD readouts
+  targetsValEl.textContent = String(activeCount).padStart(2, '0');
+  speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
 
   requestAnimationFrame(loop);
 }
