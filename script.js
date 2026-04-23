@@ -686,9 +686,14 @@ function loop() {
     activeCount++;
 
     // Single transform update — GPU composited, no layout reflow
-    t.el.style.zIndex    = Math.min(20, Math.max(1, Math.round(8 / t.z)));
     t.el.style.transform = `translate(${tx}px,${ty}px) scale(${s}) rotate(${t.rot}deg)`;
   }
+
+  // Assign zIndex by actual depth rank so no two targets ever share the same value.
+  // Doing it after the loop avoids thrashing the style during position updates.
+  const alive = targets.filter(t => !t.dead);
+  alive.sort((a, b) => b.z - a.z);          // farthest first → index 0 = lowest zIndex
+  alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
 
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
