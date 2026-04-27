@@ -2,12 +2,13 @@ const AUDIO_DIR     = 'audio/';
 const MEDIA_DIR     = 'media/';
 const IS_MOBILE     = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
 const MAX_ON_SCREEN = IS_MOBILE ? 6 : 12;
-const MAX_SPEED     = 10;
-const FLEE_RADIUS   = 140;
-const FLEE_FORCE    = 2.6;
-const HIT_RADIUS    = 120;   // px from cursor center to count as a hit
-const FIRE_RATE_MS  = 90;    // autofire interval when holding mouse down
-const BASE_PX       = 260;   // element base width — never changes after spawn; perspective handled via CSS scale
+const FLEE_RADIUS   = 150;
+const FLEE_FORCE    = 0.12;  // applied to velocity, not world offset
+const HIT_RADIUS    = 110;
+const MAX_MOVE_SPD  = 3.2;   // px/frame cap after flee
+const FIRE_RATE_MS  = 90;
+const BASE_PX       = 260;
+const GROW_RATE     = 0.007; // scale units per frame (0.15 → 1.0 over ~120 frames)
 
 const audioFiles = [
   'Nuty  this girl is coming on to me.wav',
@@ -493,20 +494,40 @@ function fireShot() {
   if (nearest) shootTarget(nearest);
 }
 
+// Mouse
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
 });
-
 document.addEventListener('mouseup', e => {
   if (e.button !== 0) return;
-  clearInterval(autoFireTimer);
-  autoFireTimer = null;
+  clearInterval(autoFireTimer); autoFireTimer = null;
 });
-
 window.addEventListener('mousemove', e => { mouseX = e.clientX; mouseY = e.clientY; });
 window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; });
+
+// Touch — explicit handling so each tap fires at the right position
+document.addEventListener('touchstart', e => {
+  if (e.target.closest('button')) return;
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseX = t.clientX; mouseY = t.clientY;
+  fireShot();
+  clearInterval(autoFireTimer);
+  autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
+}, { passive: false });
+
+document.addEventListener('touchmove', e => {
+  e.preventDefault();
+  const t = e.touches[0];
+  mouseX = t.clientX; mouseY = t.clientY;
+}, { passive: false });
+
+document.addEventListener('touchend', e => {
+  e.preventDefault();
+  clearInterval(autoFireTimer); autoFireTimer = null;
+}, { passive: false });
 
 window.addEventListener('resize', () => {
   VW = window.innerWidth;
@@ -534,12 +555,7 @@ fetch('media/manifest.json')
     requestAnimationFrame(loop);
   });
 
-// === SPAWN — perspective: starts tiny in the distance, flies toward camera ===
-//
-// Each target lives in "world space" with an offset (wx, wy) from screen center
-// and a depth z that decreases toward 0.  Screen position = center + offset/z,
-// display size = baseSize/z.  So targets appear small & centered when far,
-// then grow and drift outward as they approach, flying past the view screen.
+// === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
@@ -550,40 +566,43 @@ function spawnTarget() {
   const ext    = file.split('.').pop().toLowerCase();
   const isVideo = ext === 'mp4' || ext === 'webm' || ext === 'mov';
 
-  const W = window.innerWidth, H = window.innerHeight;
+  const W = VW, H = VH;
 
-  // World-space offset from screen center — determines which direction it flies past
-  const wx = (Math.random() - 0.5) * W * 0.9;
-  const wy = (Math.random() - 0.5) * H * 0.7;
+  // Spawn at a random screen edge
+  let sx, sy;
+  switch (Math.floor(Math.random() * 4)) {
+    case 0: sx = Math.random() * W;    sy = -100;    break; // top
+    case 1: sx = W + 100;              sy = Math.random() * H; break; // right
+    case 2: sx = Math.random() * W;    sy = H + 100; break; // bottom
+    case 3: sx = -100;                 sy = Math.random() * H; break; // left
+  }
 
-  const z        = 3.0 + Math.random() * 2.0;    // start far away
-  const zSpeed   = 0.013 + Math.random() * 0.011; // approach speed
-  const baseSize = 220 + Math.random() * 160;     // size at z=1
+  // Aim toward a random point in the middle 50% of the screen
+  const tx  = W * 0.25 + Math.random() * W * 0.5;
+  const ty  = H * 0.25 + Math.random() * H * 0.5;
+  const d   = Math.hypot(tx - sx, ty - sy);
+  const spd = 1.0 + Math.random() * 1.4;
 
+  const baseSize = 200 + Math.random() * 120;
+  const scale0   = 0.15;
   const rot      = (Math.random() - 0.5) * 30;
-  const rotSpeed = (Math.random() - 0.5) * 0.12;
-
-  // Element stays BASE_PX wide forever; perspective zoom is applied via CSS scale.
-  // This means only `transform` changes each frame — no left/top/width thrash.
-  const initSX = VW / 2 + wx / z;
-  const initSY = VH / 2 + wy / z;
-  const initS  = baseSize / (BASE_PX * z);
-  const initTx = initSX - BASE_PX / 2;
-  const initTy = initSY - BASE_PX / 2;  // hRatio=1 until image loads
+  const rotSpeed = (Math.random() - 0.5) * 0.15;
 
   const el = document.createElement('div');
   el.className = 'target';
-  el.style.cssText = `width:${BASE_PX}px;left:0;top:0;transform:translate(${initTx}px,${initTy}px) scale(${initS}) rotate(${rot}deg)`;
+  el.style.cssText = `width:${BASE_PX}px;left:0;top:0;transform:translate(${sx - BASE_PX/2}px,${sy - BASE_PX/2}px) scale(${scale0}) rotate(${rot}deg)`;
 
   const target = {
     el, file, isVideo,
-    wx, wy, z, zSpeed, baseSize,
+    sx, sy,
+    vx: (tx - sx) / d * spd,
+    vy: (ty - sy) / d * spd,
+    baseSize, scale: scale0,
     hRatio: 1,
     rot, rotSpeed,
     dead: false,
-    screenX: initSX, screenY: initSY,
-    x: initSX - baseSize/(z*2), y: initSY - baseSize/(z*2),
-    w: baseSize/z, h: baseSize/z,
+    screenX: sx, screenY: sy,
+    w: baseSize * scale0, h: baseSize * scale0,
   };
 
   if (isVideo) {
@@ -639,60 +658,53 @@ function loop() {
     const t = targets[i];
     if (t.dead) continue;
 
-    t.z -= t.zSpeed;
-
-    const sx = VW / 2 + t.wx / t.z;
-    const sy = VH / 2 + t.wy / t.z;
-
-    // Flee: nudge world-space offset so target drifts away from cursor on screen
-    const fx   = mouseX - sx;
-    const fy   = mouseY - sy;
-    const dist = Math.sqrt(fx * fx + fy * fy);
+    // Flee: push velocity away from cursor
+    const fx   = mouseX - t.sx;
+    const fy   = mouseY - t.sy;
+    const dist = Math.hypot(fx, fy);
     if (dist < FLEE_RADIUS && dist > 0) {
       const force = ((FLEE_RADIUS - dist) / FLEE_RADIUS) * FLEE_FORCE;
-      t.wx -= (fx / dist) * force * t.z;
-      t.wy -= (fy / dist) * force * t.z;
+      t.vx -= (fx / dist) * force;
+      t.vy -= (fy / dist) * force;
     }
 
-    const maxOff = Math.max(VW, VH) * 1.5;
-    if (t.wx >  maxOff) t.wx =  maxOff;
-    if (t.wx < -maxOff) t.wx = -maxOff;
-    if (t.wy >  maxOff) t.wy =  maxOff;
-    if (t.wy < -maxOff) t.wy = -maxOff;
+    // Cap speed
+    const spd = Math.hypot(t.vx, t.vy);
+    if (spd > MAX_MOVE_SPD) { t.vx = t.vx / spd * MAX_MOVE_SPD; t.vy = t.vy / spd * MAX_MOVE_SPD; }
 
+    t.sx += t.vx;
+    t.sy += t.vy;
     t.rot += t.rotSpeed;
+    t.scale = Math.min(1.0, t.scale + GROW_RATE);
 
-    const hr   = t.hRatio || 1;
-    const dw   = t.baseSize / t.z;           // visual width
-    const dh   = dw * hr;                    // visual height
-    const s    = dw / BASE_PX;               // CSS scale factor
-    const tx   = sx - BASE_PX / 2;           // translate so element center = sx,sy
-    const ty   = sy - BASE_PX * hr / 2;
+    const hr = t.hRatio || 1;
+    const dw = t.baseSize * t.scale;
+    const dh = dw * hr;
+    const s  = dw / BASE_PX;
+    const tx = t.sx - BASE_PX / 2;
+    const ty = t.sy - BASE_PX * hr / 2;
 
-    // Cache for hit detection — no getBoundingClientRect needed
-    t.screenX = sx;
-    t.screenY = sy;
+    t.screenX = t.sx;
+    t.screenY = t.sy;
     t.w = dw;
     t.h = dh;
 
-    if (t.z < 0.1 || sx < -500 || sx > VW + 500 || sy < -500 || sy > VH + 500) {
+    if (t.sx < -450 || t.sx > VW + 450 || t.sy < -450 || t.sy > VH + 450) {
       t.el.remove();
       targets.splice(i, 1);
-      setTimeout(spawnTarget, 150 + Math.random() * 400);
+      setTimeout(spawnTarget, 100 + Math.random() * 300);
       continue;
     }
 
-    totalSpeed += t.zSpeed * 100;
+    totalSpeed += spd * 40;
     activeCount++;
 
-    // Single transform update — GPU composited, no layout reflow
     t.el.style.transform = `translate(${tx}px,${ty}px) scale(${s}) rotate(${t.rot}deg)`;
   }
 
-  // Assign zIndex by actual depth rank so no two targets ever share the same value.
-  // Doing it after the loop avoids thrashing the style during position updates.
+  // Assign zIndex by size (bigger = closer = higher)
   const alive = targets.filter(t => !t.dead);
-  alive.sort((a, b) => b.z - a.z);          // farthest first → index 0 = lowest zIndex
+  alive.sort((a, b) => a.scale - b.scale);
   alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
 
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
