@@ -63,6 +63,26 @@ let VH                  = window.innerHeight;
 let lastInteractionTime = Date.now();
 let reminiscing         = false;
 
+// === SHOOT HINT ===
+function showShootHint() {
+  const el = document.getElementById('shoot-hint');
+  if (!el) return;
+  el.classList.add('visible');
+  const hide = () => {
+    el.classList.remove('visible');
+    el.classList.add('hiding');
+  };
+  const autoHide = setTimeout(hide, 4500);
+  const onInteract = () => {
+    clearTimeout(autoHide);
+    hide();
+    document.removeEventListener('mousedown', onInteract);
+    document.removeEventListener('touchstart', onInteract);
+  };
+  document.addEventListener('mousedown', onInteract);
+  document.addEventListener('touchstart', onInteract);
+}
+
 // === REMINISCING ===
 function enterReminiscing() {
   reminiscing = true;
@@ -597,6 +617,7 @@ fetch('media/manifest.json')
     initStars();
     for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     requestAnimationFrame(loop);
+    setTimeout(showShootHint, 1200);
   })
   .catch(() => {
     loadingText.textContent = 'Add files to media/ and run build-manifest.py';

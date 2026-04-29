@@ -370,6 +370,41 @@ body::after {
   box-shadow: 0 0 10px rgba(255,80,0,0.5);
 }
 
+/* === SHOOT HINT === */
+#shoot-hint {
+  position: fixed;
+  bottom: 12%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  pointer-events: none;
+  z-index: 160;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+#shoot-hint.visible { opacity: 1; }
+#shoot-hint.hiding  { opacity: 0; }
+
+.hint-crosshair {
+  font-size: 2.2rem;
+  color: #00ffcc;
+  text-shadow: 0 0 16px rgba(0,255,200,0.9);
+  animation: hint-pulse 1.2s ease-in-out infinite;
+  line-height: 1;
+  margin-bottom: 0.4rem;
+}
+.hint-text {
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  letter-spacing: 0.3em;
+  color: rgba(0,255,200,0.75);
+  text-shadow: 0 0 10px rgba(0,255,200,0.5);
+}
+@keyframes hint-pulse {
+  0%, 100% { transform: scale(1);    opacity: 1; }
+  50%       { transform: scale(1.18); opacity: 0.7; }
+}
+
 /* === REMINISCING BANNER === */
 #reminiscing-banner {
   position: fixed;
