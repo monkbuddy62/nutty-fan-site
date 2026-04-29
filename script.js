@@ -521,6 +521,7 @@ function fireShot() {
 // Mouse
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
+  if (document.getElementById('gameOverScreen')) return;
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
 });
@@ -534,6 +535,7 @@ window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; })
 // Touch — explicit handling so each tap fires at the right position
 document.addEventListener('touchstart', e => {
   if (e.target.closest('button')) return;
+  if (document.getElementById('gameOverScreen')) return;
   e.preventDefault();
   const t = e.touches[0];
   mouseX = t.clientX; mouseY = t.clientY;
@@ -883,8 +885,8 @@ function spawnPanel(ox, oy, vx, vy) {
   el.className = 'boss-panel';
   el.style.width  = size + 'px';
   el.style.height = size + 'px';
-  el.style.left   = (ox - size / 2) + 'px';
-  el.style.top    = (oy - size / 2) + 'px';
+  el.style.left   = '0';
+  el.style.top    = '0';
   document.body.appendChild(el);
   boss.panels.push({
     el, size, x: ox, y: oy, vx, vy,
@@ -898,8 +900,16 @@ function destroyPanel(p) {
   if (p.dead) return;
   p.dead = true;
   p.el.remove();
-  explodeDust(p.x, p.y);
+  explodeStars(p.x, p.y);
   playBoom();
+  const flash = document.createElement('div');
+  Object.assign(flash.style, {
+    position: 'fixed', inset: '0', background: 'rgba(255,100,0,0.15)',
+    pointerEvents: 'none', zIndex: '9998', transition: 'opacity 0.3s',
+  });
+  document.body.appendChild(flash);
+  requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
+  setTimeout(() => flash.remove(), 350);
 }
 
 function hitPlayer() {
@@ -920,9 +930,40 @@ function hitPlayer() {
 }
 
 function playerDefeated() {
-  // TODO: proper game-over screen
   endBoss();
-  setTimeout(() => { for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 300); }, 800);
+  setTimeout(showGameOver, 600);
+}
+
+function showGameOver() {
+  const overlay = document.createElement('div');
+  overlay.id = 'gameOverScreen';
+  overlay.innerHTML = `
+    <div class="gameover-inner">
+      <div class="gameover-title">GAME OVER</div>
+      <div class="gameover-sub">NUTTY WINS THIS TIME</div>
+      <button class="gameover-btn" id="restartBtn">[ RETRY ]</button>
+    </div>`;
+  document.body.appendChild(overlay);
+  document.getElementById('restartBtn').addEventListener('click', restartGame);
+}
+
+function restartGame() {
+  const overlay = document.getElementById('gameOverScreen');
+  if (overlay) overlay.remove();
+
+  score = 0;
+  scoreVal.textContent = '000';
+
+  const livesVal = document.getElementById('lives-val');
+  if (livesVal) {
+    livesVal.textContent = 'ARMED';
+    livesVal.classList.add('hud-armed');
+    livesVal.removeAttribute('id');
+    const lbl = livesVal.previousElementSibling;
+    if (lbl) lbl.textContent = 'WPNS';
+  }
+
+  for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
 }
 
 function damageBoss(amount = 1) {

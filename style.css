@@ -370,6 +370,69 @@ body::after {
   box-shadow: 0 0 10px rgba(255,80,0,0.5);
 }
 
+/* === GAME OVER === */
+#gameOverScreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: goFadeIn 0.5s ease forwards;
+}
+
+@keyframes goFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.gameover-inner { text-align: center; }
+
+.gameover-title {
+  font-family: 'Courier New', monospace;
+  font-size: 4rem;
+  font-weight: bold;
+  letter-spacing: 0.3em;
+  color: #ff4400;
+  text-shadow: 0 0 30px rgba(255,80,0,0.9), 0 0 70px rgba(255,80,0,0.4);
+  margin-bottom: 0.75rem;
+  animation: goGlitch 2.4s infinite;
+}
+
+@keyframes goGlitch {
+  0%, 88%, 100% { transform: none; }
+  90% { transform: translate(-3px, 0); text-shadow: 3px 0 #00ffcc, -3px 0 #ff4400; }
+  92% { transform: translate(3px, 0);  text-shadow: -3px 0 #00ffcc, 3px 0 #ff4400; }
+  94% { transform: none; }
+}
+
+.gameover-sub {
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  letter-spacing: 0.22em;
+  color: rgba(255,80,0,0.55);
+  margin-bottom: 2.5rem;
+}
+
+.gameover-btn {
+  background: transparent;
+  border: 1px solid rgba(0,255,200,0.45);
+  color: #00ffcc;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  letter-spacing: 0.2em;
+  padding: 0.7rem 2.2rem;
+  cursor: pointer;
+  text-shadow: 0 0 10px rgba(0,255,200,0.7);
+  box-shadow: 0 0 15px rgba(0,255,200,0.12), inset 0 0 12px rgba(0,255,200,0.05);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.gameover-btn:hover {
+  background: rgba(0,255,200,0.1);
+  box-shadow: 0 0 28px rgba(0,255,200,0.28), inset 0 0 12px rgba(0,255,200,0.08);
+}
+
 @media (max-width: 600px) {
   #hud-title { font-size: 0.78rem; }
   #hud-top, #hud-bottom { padding-left: 4rem; padding-right: 4rem; }
