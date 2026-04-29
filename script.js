@@ -54,6 +54,7 @@ let audioCtx       = null;
 let currentClip    = null;
 let shootFlash     = null;      // { x, y, t }
 let autoFireTimer  = null;
+let frameCount     = 0;
 let VW             = window.innerWidth;
 let VH             = window.innerHeight;
 
@@ -159,7 +160,7 @@ function spawnParticle(cx, cy, styles, flyX, flyY, duration, delay) {
 }
 
 function explodeDust(cx, cy) {
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 16; i++) {
     const angle = Math.random() * Math.PI * 2;
     const dist  = 60 + Math.random() * 180;
     const size  = 3 + Math.random() * 7;
@@ -174,7 +175,7 @@ function explodeDust(cx, cy) {
       opacity: '1',
     }, Math.cos(angle) * dist, Math.sin(angle) * dist, dur, 0);
   }
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     const angle = Math.random() * Math.PI * 2;
     const dist  = 30 + Math.random() * 80;
     spawnParticle(cx, cy, {
@@ -674,6 +675,7 @@ function shootTarget(target) {
 
 // === GAME LOOP ===
 function loop() {
+  frameCount++;
   drawWarp();
   drawHudOverlay();
 
@@ -683,19 +685,24 @@ function loop() {
     const t = targets[i];
     if (t.dead) continue;
 
-    // Flee: push velocity away from cursor
-    const fx   = mouseX - t.sx;
-    const fy   = mouseY - t.sy;
-    const dist = Math.hypot(fx, fy);
-    if (dist < FLEE_RADIUS && dist > 0) {
-      const force = ((FLEE_RADIUS - dist) / FLEE_RADIUS) * FLEE_FORCE;
-      t.vx -= (fx / dist) * force;
-      t.vy -= (fy / dist) * force;
+    // Flee: only compute hypot when cursor is plausibly close (cheap AABB pre-check)
+    const fx = mouseX - t.sx;
+    const fy = mouseY - t.sy;
+    if (Math.abs(fx) < FLEE_RADIUS && Math.abs(fy) < FLEE_RADIUS) {
+      const dist = Math.hypot(fx, fy);
+      if (dist < FLEE_RADIUS && dist > 0) {
+        const force = ((FLEE_RADIUS - dist) / FLEE_RADIUS) * FLEE_FORCE;
+        t.vx -= (fx / dist) * force;
+        t.vy -= (fy / dist) * force;
+        // cap only when flee just modified velocity
+        const spd2 = t.vx * t.vx + t.vy * t.vy;
+        if (spd2 > MAX_MOVE_SPD * MAX_MOVE_SPD) {
+          const s2 = Math.sqrt(spd2);
+          t.vx = t.vx / s2 * MAX_MOVE_SPD;
+          t.vy = t.vy / s2 * MAX_MOVE_SPD;
+        }
+      }
     }
-
-    // Cap speed
-    const spd = Math.hypot(t.vx, t.vy);
-    if (spd > MAX_MOVE_SPD) { t.vx = t.vx / spd * MAX_MOVE_SPD; t.vy = t.vy / spd * MAX_MOVE_SPD; }
 
     t.sx += t.vx;
     t.sy += t.vy;
@@ -721,16 +728,18 @@ function loop() {
       continue;
     }
 
-    totalSpeed += spd * 40;
+    totalSpeed += Math.hypot(t.vx, t.vy) * 40;
     activeCount++;
 
     t.el.style.transform = `translate(${tx}px,${ty}px) scale(${s}) rotate(${t.rot}deg)`;
   }
 
-  // Assign zIndex by size (bigger = closer = higher)
-  const alive = targets.filter(t => !t.dead);
-  alive.sort((a, b) => a.scale - b.scale);
-  alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
+  // zIndex: only re-sort every 8 frames — saves ~84% of the per-frame style writes
+  if (frameCount % 8 === 0) {
+    const alive = targets.filter(t => !t.dead);
+    alive.sort((a, b) => a.scale - b.scale);
+    alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
+  }
 
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';

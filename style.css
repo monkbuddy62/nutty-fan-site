@@ -367,7 +367,7 @@ body::after {
   will-change: transform;
   background: linear-gradient(135deg, #ff6600 0%, #cc3300 45%, #ff9900 100%);
   border: 2px solid rgba(255,200,80,0.55);
-  box-shadow: 0 0 14px rgba(255,80,0,0.6), inset 0 0 8px rgba(0,0,0,0.35);
+  box-shadow: 0 0 10px rgba(255,80,0,0.5);
 }
 
 @media (max-width: 600px) {
