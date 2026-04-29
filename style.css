@@ -373,21 +373,31 @@ body::after {
 /* === REMINISCING BANNER === */
 #reminiscing-banner {
   position: fixed;
-  bottom: 18%;
+  bottom: 22%;
   left: 50%;
-  transform: translateX(-50%);
   font-family: 'Courier New', monospace;
-  font-size: 0.8rem;
+  font-size: 1.6rem;
   font-style: italic;
-  letter-spacing: 0.35em;
-  color: rgba(0, 255, 200, 0.35);
+  letter-spacing: 0.25em;
+  color: #00ffcc;
+  text-shadow: 0 0 18px rgba(0,255,200,0.9), 0 0 50px rgba(0,255,200,0.4);
   pointer-events: none;
   z-index: 150;
   opacity: 0;
-  transition: opacity 3s ease;
+  transition: opacity 2s ease;
   white-space: nowrap;
 }
-#reminiscing-banner.visible { opacity: 1; }
+#reminiscing-banner.visible {
+  opacity: 1;
+  animation: reminisce-wave 11s ease-in-out infinite;
+}
+@keyframes reminisce-wave {
+  0%   { transform: translateX(calc(-50% - 90px)) translateY(0px); }
+  28%  { transform: translateX(calc(-50% + 60px)) translateY(-12px); }
+  55%  { transform: translateX(calc(-50% + 95px)) translateY(8px); }
+  80%  { transform: translateX(calc(-50% - 30px)) translateY(-6px); }
+  100% { transform: translateX(calc(-50% - 90px)) translateY(0px); }
+}
 
 /* === GAME OVER === */
 #gameOverScreen {
