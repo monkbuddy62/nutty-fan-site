@@ -370,6 +370,25 @@ body::after {
   box-shadow: 0 0 10px rgba(255,80,0,0.5);
 }
 
+/* === REMINISCING BANNER === */
+#reminiscing-banner {
+  position: fixed;
+  bottom: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+  font-style: italic;
+  letter-spacing: 0.35em;
+  color: rgba(0, 255, 200, 0.35);
+  pointer-events: none;
+  z-index: 150;
+  opacity: 0;
+  transition: opacity 3s ease;
+  white-space: nowrap;
+}
+#reminiscing-banner.visible { opacity: 1; }
+
 /* === GAME OVER === */
 #gameOverScreen {
   position: fixed;

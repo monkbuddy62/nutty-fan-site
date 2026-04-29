@@ -41,22 +41,46 @@ const streakMessages = {
   7: '☠️ UNSTOPPABLE',
 };
 
+const TARGET_LIFETIME_MS  = 18000;
+const REMINISCE_IDLE_MS   = 25000;
+
 // === STATE ===
-let mediaFiles     = [];
-let targets        = [];
-let score          = 0;
-let killStreak     = 0;
-let lastKillTime   = 0;
-let muted          = false;
-let mouseX         = -9999;
-let mouseY         = -9999;
-let audioCtx       = null;
-let currentClip    = null;
-let shootFlash     = null;      // { x, y, t }
-let autoFireTimer  = null;
-let frameCount     = 0;
-let VW             = window.innerWidth;
-let VH             = window.innerHeight;
+let mediaFiles          = [];
+let targets             = [];
+let score               = 0;
+let killStreak          = 0;
+let lastKillTime        = 0;
+let muted               = false;
+let mouseX              = -9999;
+let mouseY              = -9999;
+let audioCtx            = null;
+let currentClip         = null;
+let shootFlash          = null;      // { x, y, t }
+let autoFireTimer       = null;
+let frameCount          = 0;
+let VW                  = window.innerWidth;
+let VH                  = window.innerHeight;
+let lastInteractionTime = Date.now();
+let reminiscing         = false;
+
+// === REMINISCING ===
+function enterReminiscing() {
+  reminiscing = true;
+  const b = document.getElementById('reminiscing-banner');
+  if (b) b.classList.add('visible');
+}
+
+function exitReminiscing() {
+  if (!reminiscing) return;
+  reminiscing = false;
+  const b = document.getElementById('reminiscing-banner');
+  if (b) b.classList.remove('visible');
+}
+
+function touchInteraction() {
+  lastInteractionTime = Date.now();
+  exitReminiscing();
+}
 
 // === DOM ===
 const gameArea      = document.getElementById('gameArea');
@@ -522,6 +546,7 @@ function fireShot() {
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
+  touchInteraction();
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
 });
@@ -537,6 +562,7 @@ document.addEventListener('touchstart', e => {
   if (e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
   e.preventDefault();
+  touchInteraction();
   const t = e.touches[0];
   mouseX = t.clientX; mouseY = t.clientY;
   fireShot();
@@ -630,7 +656,10 @@ function spawnTarget() {
     dead: false,
     screenX: sx, screenY: sy,
     w: baseSize * scale0, h: baseSize * scale0,
+    fadeTimer: null,
   };
+
+  target.fadeTimer = setTimeout(() => fadeTarget(target), TARGET_LIFETIME_MS);
 
   if (isVideo) {
     const vid = document.createElement('video');
@@ -653,10 +682,26 @@ function spawnTarget() {
   gameArea.appendChild(el);
 }
 
+// === FADE — lifetime expiry ===
+function fadeTarget(t) {
+  if (t.dead) return;
+  t.el.style.transition = 'opacity 2.5s ease';
+  t.el.style.opacity = '0';
+  setTimeout(() => {
+    if (t.dead) return;
+    t.dead = true;
+    t.el.remove();
+    const idx = targets.indexOf(t);
+    if (idx !== -1) targets.splice(idx, 1);
+    setTimeout(spawnTarget, 100 + Math.random() * 400);
+  }, 2600);
+}
+
 // === SHOOT — explode immediately in place ===
 function shootTarget(target) {
   if (target.dead) return;
   target.dead = true;
+  if (target.fadeTimer) { clearTimeout(target.fadeTimer); target.fadeTimer = null; }
   targets.splice(targets.indexOf(target), 1);
 
   score++;
@@ -724,6 +769,8 @@ function loop() {
     t.h = dh;
 
     if (t.sx < -450 || t.sx > VW + 450 || t.sy < -450 || t.sy > VH + 450) {
+      t.dead = true;
+      if (t.fadeTimer) { clearTimeout(t.fadeTimer); t.fadeTimer = null; }
       t.el.remove();
       targets.splice(i, 1);
       setTimeout(spawnTarget, 100 + Math.random() * 300);
@@ -745,6 +792,11 @@ function loop() {
 
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
+
+  // Reminiscing mode check (~every 3s)
+  if (frameCount % 180 === 0 && !boss.active && !reminiscing) {
+    if (Date.now() - lastInteractionTime > REMINISCE_IDLE_MS) enterReminiscing();
+  }
 
   // Boss panels
   for (let i = boss.panels.length - 1; i >= 0; i--) {
