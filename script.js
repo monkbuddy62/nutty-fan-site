@@ -806,7 +806,7 @@ function buildBossDOM() {
 
   const hud = document.createElement('div');
   hud.id = 'boss-hud';
-  hud.innerHTML = `<div id="boss-hud-name">NUTTY</div><div id="boss-hp-track"><div id="boss-hp-fill"></div></div>`;
+  hud.innerHTML = `<div id="boss-hud-name">JAKE THE SNAKE</div><div id="boss-hp-track"><div id="boss-hp-fill"></div></div>`;
   document.body.appendChild(hud);
   boss.hudEl = hud;
 
@@ -940,7 +940,7 @@ function showGameOver() {
   overlay.innerHTML = `
     <div class="gameover-inner">
       <div class="gameover-title">GAME OVER</div>
-      <div class="gameover-sub">NUTTY WINS THIS TIME</div>
+      <div class="gameover-sub">JAKE THE SNAKE WINS THIS TIME</div>
       <button class="gameover-btn" id="restartBtn">[ RETRY ]</button>
     </div>`;
   document.body.appendChild(overlay);
