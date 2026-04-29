@@ -362,7 +362,7 @@ body::after {
 .boss-panel {
   position: fixed;
   pointer-events: none;
-  z-index: 250;
+  z-index: 265;
   transform-origin: center;
   will-change: transform;
   background: linear-gradient(135deg, #ff6600 0%, #cc3300 45%, #ff9900 100%);
