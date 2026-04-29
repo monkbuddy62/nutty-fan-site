@@ -485,6 +485,29 @@ function fireShot() {
   playPew();
   shootFlash = { x: mouseX, y: mouseY, t: Date.now() };
 
+  // Boss panel hit
+  for (let i = boss.panels.length - 1; i >= 0; i--) {
+    const p = boss.panels[i];
+    if (p.dead) continue;
+    if (Math.hypot(mouseX - p.x, mouseY - p.y) < HIT_RADIUS) {
+      destroyPanel(p);
+      boss.panels.splice(i, 1);
+      return;
+    }
+  }
+
+  // Boss weak point (mouth only when open)
+  if (boss.active && boss.mouthOpen && boss.el) {
+    const r  = boss.el.getBoundingClientRect();
+    const cx = r.left + r.width  * 0.5;
+    const cy = r.top  + r.height * 0.65;
+    if (Math.hypot(mouseX - cx, mouseY - cy) < HIT_RADIUS * 1.5) {
+      damageBoss(1);
+      return;
+    }
+  }
+
+  // Normal targets
   let nearest = null, nearestD = HIT_RADIUS;
   for (const t of targets) {
     if (t.dead) continue;
@@ -557,6 +580,7 @@ fetch('media/manifest.json')
 
 // === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
+  if (boss.active) return;
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
   const active = new Set(targets.map(t => t.file));
@@ -634,6 +658,7 @@ function shootTarget(target) {
 
   score++;
   scoreVal.textContent = String(score).padStart(3, '0');
+  if (score === BOSS_SCORE && !boss.active) startBoss();
 
   const now = Date.now();
   killStreak   = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
@@ -710,7 +735,235 @@ function loop() {
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
 
+  // Boss panels
+  for (let i = boss.panels.length - 1; i >= 0; i--) {
+    const p = boss.panels[i];
+    if (p.dead) { boss.panels.splice(i, 1); continue; }
+    p.x += p.vx;
+    p.y += p.vy;
+    p.rot += p.rotSpeed;
+    p.el.style.transform = `translate(${p.x - p.size/2}px,${p.y - p.size/2}px) rotate(${p.rot}deg)`;
+    if (p.y > VH + 80) {
+      p.el.remove();
+      boss.panels.splice(i, 1);
+      hitPlayer();
+    }
+  }
+
   requestAnimationFrame(loop);
+}
+
+// === BOSS FIGHT ===
+
+const BOSS_DIR      = 'boss/';
+const BOSS_SCORE    = 10;     // kills before boss spawns — lower to test
+const BOSS_HP_MAX   = 20;
+const PLAYER_HP_MAX = 3;
+
+const boss = {
+  active: false, hp: BOSS_HP_MAX, phase: 1,
+  state: 'idle',   // idle | attack | hit | rage
+  mouthOpen: false,
+  el: null, imgEl: null, hudEl: null,
+  attackLoop: null,
+  panels: [],
+};
+
+let playerHp = PLAYER_HP_MAX;
+
+const BOSS_IMGS = { idle: 'boss-idle.png', attack: 'boss-attack.png', hit: 'boss-hit.png', rage: 'boss-rage.png' };
+
+function setBossState(s) {
+  boss.state     = s;
+  boss.mouthOpen = s === 'attack';
+  if (boss.imgEl) boss.imgEl.src = BOSS_DIR + (BOSS_IMGS[s] || 'boss-idle.png');
+}
+
+function livesStr() {
+  return '♥'.repeat(playerHp) + '♡'.repeat(Math.max(0, PLAYER_HP_MAX - playerHp));
+}
+
+function buildBossDOM() {
+  const wrap = document.createElement('div');
+  wrap.id = 'boss-wrap';
+  const img = document.createElement('img');
+  img.id = 'boss-img'; img.alt = 'BOSS';
+  img.src = BOSS_DIR + 'boss-idle.png';
+  wrap.appendChild(img);
+  document.body.appendChild(wrap);
+  boss.el = wrap; boss.imgEl = img;
+
+  const hud = document.createElement('div');
+  hud.id = 'boss-hud';
+  hud.innerHTML = `<div id="boss-hud-name">NUTTY</div><div id="boss-hp-track"><div id="boss-hp-fill"></div></div>`;
+  document.body.appendChild(hud);
+  boss.hudEl = hud;
+
+  // Repurpose WPNS / ARMED cell → player lives
+  const armedVal = document.querySelector('.hud-armed');
+  if (armedVal) {
+    armedVal.textContent = livesStr();
+    armedVal.classList.remove('hud-armed');
+    armedVal.id = 'lives-val';
+    const lbl = armedVal.previousElementSibling;
+    if (lbl) lbl.textContent = 'LIVES';
+  }
+}
+
+function startBoss() {
+  if (boss.active) return;
+  boss.active = true;
+  boss.hp     = BOSS_HP_MAX;
+  boss.phase  = 1;
+  playerHp    = PLAYER_HP_MAX;
+
+  buildBossDOM();
+  setBossState('idle');
+
+  // Slide in from top
+  requestAnimationFrame(() => {
+    boss.el.classList.add('visible');
+    boss.hudEl.classList.add('visible');
+  });
+
+  // Slow then clear existing targets
+  targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
+  setTimeout(() => {
+    [...targets].forEach(t => { t.dead = true; t.el.remove(); });
+    targets.length = 0;
+  }, 1000);
+
+  bossLoop();
+}
+
+function bossLoop() {
+  const delay = boss.phase === 1 ? 2600 : 1700;
+  boss.attackLoop = setTimeout(() => {
+    if (!boss.active) return;
+    setBossState('attack');
+    firePanels();
+    setTimeout(() => {
+      if (boss.active) setBossState(boss.phase === 2 ? 'rage' : 'idle');
+    }, 1100);
+    bossLoop();
+  }, delay);
+}
+
+function firePanels() {
+  if (!boss.el) return;
+  const r  = boss.el.getBoundingClientRect();
+  const ox = r.left + r.width * 0.5;
+  const oy = r.top  + r.height * 0.72;   // approximate mouth position
+  const n  = boss.phase === 1 ? 3 : 5;
+
+  for (let i = 0; i < n; i++) {
+    const spread = n > 1 ? (i / (n - 1) - 0.5) * 4.2 : 0;
+    spawnPanel(ox, oy, spread, 1.8 + Math.random() * 1.0);
+  }
+  // Phase 2 bonus: one panel aimed at cursor
+  if (boss.phase === 2 && mouseX > 0) {
+    const dx = mouseX - ox, dy = mouseY - oy;
+    const d  = Math.hypot(dx, dy) || 1;
+    spawnPanel(ox, oy, dx / d * 3.5, Math.max(1.5, dy / d * 3.5));
+  }
+}
+
+function spawnPanel(ox, oy, vx, vy) {
+  const size = 50 + Math.random() * 40;
+  const el   = document.createElement('div');
+  el.className = 'boss-panel';
+  el.style.width  = size + 'px';
+  el.style.height = size + 'px';
+  el.style.left   = (ox - size / 2) + 'px';
+  el.style.top    = (oy - size / 2) + 'px';
+  document.body.appendChild(el);
+  boss.panels.push({
+    el, size, x: ox, y: oy, vx, vy,
+    rot: Math.random() * 360,
+    rotSpeed: (Math.random() - 0.5) * 9,
+    dead: false,
+  });
+}
+
+function destroyPanel(p) {
+  if (p.dead) return;
+  p.dead = true;
+  p.el.remove();
+  explodeDust(p.x, p.y);
+  playBoom();
+}
+
+function hitPlayer() {
+  playerHp = Math.max(0, playerHp - 1);
+  const lv = document.getElementById('lives-val');
+  if (lv) lv.textContent = livesStr();
+
+  const flash = document.createElement('div');
+  Object.assign(flash.style, {
+    position: 'fixed', inset: '0', background: 'rgba(255,0,0,0.22)',
+    pointerEvents: 'none', zIndex: '9998', transition: 'opacity 0.5s',
+  });
+  document.body.appendChild(flash);
+  requestAnimationFrame(() => requestAnimationFrame(() => { flash.style.opacity = '0'; }));
+  setTimeout(() => flash.remove(), 600);
+
+  if (playerHp <= 0) playerDefeated();
+}
+
+function playerDefeated() {
+  // TODO: proper game-over screen
+  endBoss();
+  setTimeout(() => { for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 300); }, 800);
+}
+
+function damageBoss(amount = 1) {
+  if (!boss.active) return;
+  boss.hp = Math.max(0, boss.hp - amount);
+
+  const fill = document.getElementById('boss-hp-fill');
+  if (fill) fill.style.width = (boss.hp / BOSS_HP_MAX * 100) + '%';
+
+  const prev = boss.state;
+  setBossState('hit');
+  setTimeout(() => {
+    if (boss.active) setBossState(boss.phase === 2 ? 'rage' : prev === 'attack' ? 'attack' : 'idle');
+  }, 200);
+
+  // Phase 2 at half HP
+  if (boss.phase === 1 && boss.hp <= BOSS_HP_MAX / 2) {
+    boss.phase = 2;
+    clearTimeout(boss.attackLoop);
+    setBossState('rage');
+    bossLoop();
+  }
+
+  if (boss.hp <= 0) defeatBoss();
+}
+
+function defeatBoss() {
+  boss.active = false;
+  clearTimeout(boss.attackLoop);
+  [...boss.panels].forEach(destroyPanel);
+  boss.panels = [];
+
+  if (boss.el) {
+    const r = boss.el.getBoundingClientRect();
+    explodeShatter({ el: boss.imgEl, screenX: r.left + r.width/2, screenY: r.top + r.height/2, w: r.width, h: r.height, rot: 0 });
+    boss.el.remove();
+  }
+  boss.hudEl?.remove();
+  boss.el = boss.imgEl = boss.hudEl = null;
+
+  setTimeout(() => { for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250); }, 1800);
+}
+
+function endBoss() {
+  boss.active = false;
+  clearTimeout(boss.attackLoop);
+  [...boss.panels].forEach(p => { p.dead = true; p.el.remove(); });
+  boss.panels = [];
+  boss.el?.remove(); boss.hudEl?.remove();
+  boss.el = boss.imgEl = boss.hudEl = null;
 }
 
 // === STREAK ===

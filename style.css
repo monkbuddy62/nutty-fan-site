@@ -301,6 +301,75 @@ body::after {
   z-index: 150;
 }
 
+/* === BOSS === */
+#boss-wrap {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 320px;
+  top: -400px;
+  z-index: 260;
+  pointer-events: none;
+  transition: top 1.0s cubic-bezier(0.22, 1, 0.36, 1);
+}
+#boss-wrap.visible { top: -80px; }
+
+#boss-img {
+  width: 100%;
+  display: block;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 0 18px rgba(255,80,0,0.75)) drop-shadow(0 6px 30px rgba(0,0,0,0.95));
+}
+
+#boss-hud {
+  position: fixed;
+  top: 218px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  z-index: 270;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.5s;
+}
+#boss-hud.visible { opacity: 1; }
+
+#boss-hud-name {
+  font-size: 0.65rem;
+  letter-spacing: 0.25em;
+  color: #ff6600;
+  margin-bottom: 5px;
+  text-shadow: 0 0 10px rgba(255,100,0,0.8);
+}
+
+#boss-hp-track {
+  width: 200px;
+  height: 7px;
+  background: rgba(255,80,0,0.15);
+  border: 1px solid rgba(255,80,0,0.4);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+#boss-hp-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #cc2200, #ff6600);
+  transition: width 0.15s;
+  box-shadow: 0 0 6px rgba(255,80,0,0.8);
+}
+
+.boss-panel {
+  position: fixed;
+  pointer-events: none;
+  z-index: 250;
+  transform-origin: center;
+  will-change: transform;
+  background: linear-gradient(135deg, #ff6600 0%, #cc3300 45%, #ff9900 100%);
+  border: 2px solid rgba(255,200,80,0.55);
+  box-shadow: 0 0 14px rgba(255,80,0,0.6), inset 0 0 8px rgba(0,0,0,0.35);
+}
+
 @media (max-width: 600px) {
   #hud-title { font-size: 0.78rem; }
   #hud-top, #hud-bottom { padding-left: 4rem; padding-right: 4rem; }
