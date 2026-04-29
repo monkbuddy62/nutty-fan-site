@@ -756,7 +756,7 @@ function loop() {
 // === BOSS FIGHT ===
 
 const BOSS_DIR      = 'boss/';
-const BOSS_SCORE    = 10;     // kills before boss spawns — lower to test
+const BOSS_SCORE    = 100;
 const BOSS_HP_MAX   = 20;
 const PLAYER_HP_MAX = 3;
 
