@@ -22,8 +22,15 @@ const S2_DRONE_SPAWN_FR  = 30;                    // frames between drone spawn 
 const OZ_BOMBS_NEEDED    = 3;
 const OZ_SOCKET_OPEN_MS  = IS_MOBILE ? 1900 : 1500; // vulnerability window (timing)
 const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (accuracy)
-const OZ_ATTACK_MS       = 3400;                  // orb volley cadence, shrinks per bomb
+const OZ_ATTACK_MS       = 3000;                  // attack cadence, shrinks per bomb
 const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
+
+const S2_SHIELD_FR       = 540;                   // shield recharge, frames (~9s)
+const OZ_LASER_SPEED     = 4.6;                   // laser bolts — fast, dodge only
+const OZ_LASER_BOLTS     = 3;                     // bolts per burst
+const OZ_MISSILE_SPEED   = 0.95;                  // homing missiles — slow but they follow
+const OZ_MISSILE_TURN    = 0.05;                  // steering lerp per frame
+const S2_PARTICLES       = IS_MOBILE ? 70 : 130;  // particle pool (trails, sparks, bursts)
 const OZ_HOLD_Z          = -70;                   // where Ozamatron parks — close and huge
 const OZ_APPROACH_FR     = 420;                   // frames of approach glide (~7s)
 const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, arms erased
@@ -89,7 +96,9 @@ const S2 = {
   frame: 0, kills: 0, lives: S2_LIVES, bombs: 0,
   renderer: null, scene: null, camera: null, cvs: null,
   ship: null, halfW: 16, halfH: 9, shake: 0, starSpeed: 0,
-  clouds: [], drones: [], asteroids: [], orbs: [],
+  shield: true, shieldT: 0,
+  clouds: [], drones: [], asteroids: [], orbs: [], lasers: [], missiles: [],
+  _atkIdx: 0, _bassS: 0, _bassAvg: 0.12, _beatPulse: 0, _beatCd: 0, _beatSide: 1,
   oz: null, sockets: [], debris: [],
   throw: null, beatT: 0, _nextArm: 0, _arms: null,
   approachFrame: 0, lastAsteroid: 0, lastDroneFrame: 0,
@@ -133,6 +142,7 @@ function s2InitScene() {
 
   s2BuildStars();
   s2BuildShip();
+  s2InitParticles();
   s2ComputeExtents();
 
   window.addEventListener('resize', () => {
@@ -193,9 +203,68 @@ function s2BuildShip() {
   engineLight.position.set(0, 0, 2.5);
   ship.add(engineLight);
 
+  // Shield bubble — soft additive sphere, tanks exactly one hit
+  const shield = new THREE.Mesh(
+    new THREE.SphereGeometry(3.4, 16, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x44ddff, transparent: true, opacity: 0.15,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    })
+  );
+  ship.add(shield);
+  S2._shieldMesh = shield;
+
   ship.position.set(0, -S2.halfH, S2_SHIP_Z + 8);
   S2.scene.add(ship);
   S2.ship = ship;
+}
+
+// === PARTICLES — pooled additive sprites for trails, sparks, and bursts ===
+function s2InitParticles() {
+  S2._pool = [];
+  S2._poolIdx = 0;
+  const geo = new THREE.PlaneGeometry(1, 1);
+  for (let i = 0; i < S2_PARTICLES; i++) {
+    const mesh = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
+      map: s2GlowTexture(), transparent: true, opacity: 0,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    mesh.visible = false;
+    S2.scene.add(mesh);
+    S2._pool.push({ mesh, vel: new THREE.Vector3(), life: 0, maxLife: 1 });
+  }
+}
+
+function s2Particle(pos, vel, size, color, life) {
+  const p = S2._pool[S2._poolIdx++ % S2._pool.length];
+  p.mesh.visible = true;
+  p.mesh.position.copy(pos);
+  p.mesh.scale.setScalar(size);
+  p.mesh.material.color.setHex(color);
+  p.mesh.material.opacity = 0.85;
+  p.vel.copy(vel);
+  p.life = p.maxLife = life;
+}
+
+function s2ParticleBurst(pos, n, color, speed, size) {
+  for (let i = 0; i < n; i++) {
+    const v = new THREE.Vector3(
+      (Math.random() - 0.5), (Math.random() - 0.5), (Math.random() - 0.5)
+    ).normalize().multiplyScalar(speed * (0.4 + Math.random() * 0.8));
+    s2Particle(pos, v, size * (0.6 + Math.random() * 0.8), color, 22 + Math.random() * 14 | 0);
+  }
+}
+
+function s2UpdateParticles() {
+  for (const p of S2._pool) {
+    if (p.life <= 0) continue;
+    p.life--;
+    p.mesh.position.add(p.vel);
+    p.vel.multiplyScalar(0.94);
+    p.mesh.material.opacity = 0.85 * (p.life / p.maxLife);
+    p.mesh.scale.multiplyScalar(1.015);
+    if (p.life <= 0) p.mesh.visible = false;
+  }
 }
 
 // === ENTRY / EXIT ===
@@ -208,6 +277,8 @@ function startStage2() {
   S2.frame  = 0; S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
   S2.lastAsteroid = 0; S2.lastDroneFrame = 0;
   S2.starSpeed = S2_STAR_SPEED;
+  S2.shield = true; S2.shieldT = 0; S2._laserQueue = 0;
+  if (S2._shieldMesh) S2._shieldMesh.visible = true;
 
   // Any gallery target that slipped in while three.min.js loaded
   [...targets].forEach(t => { if (t.fadeTimer) clearTimeout(t.fadeTimer); t.dead = true; t.el.remove(); });
@@ -258,8 +329,10 @@ function s2Teardown() {
   s2StopTheme();
   clearTimeout(S2.socketTimer); S2.socketTimer = null;
   clearTimeout(S2.attackTimer); S2.attackTimer = null;
-  [...S2.drones, ...S2.asteroids, ...S2.orbs, ...S2.debris].forEach(o => S2.scene.remove(o.mesh || o));
-  S2.drones = []; S2.asteroids = []; S2.orbs = []; S2.debris = [];
+  [...S2.drones, ...S2.asteroids, ...S2.orbs, ...S2.lasers, ...S2.missiles, ...S2.debris].forEach(o => S2.scene.remove(o.mesh || o));
+  S2.drones = []; S2.asteroids = []; S2.orbs = []; S2.lasers = []; S2.missiles = []; S2.debris = [];
+  S2._laserQueue = 0;
+  if (S2._pool) S2._pool.forEach(p => { p.life = 0; p.mesh.visible = false; });
   s2RemoveOz();
   if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
   if (S2.cvs) S2.cvs.classList.remove('visible');
@@ -351,18 +424,21 @@ function s2Project(worldPos) {
 function stage2Fire() {
   if (S2.phase === 'victory' || S2.phase === 'gameover') return;
 
-  // 1. Incoming orbs — shootable, like Jake's panels
-  let best = -1, bestD = HIT_RADIUS, bestP = null;
-  for (let i = 0; i < S2.orbs.length; i++) {
-    const p = s2Project(S2.orbs[i].mesh.position);
-    if (!p) continue;
-    const d = Math.hypot(mouseX - p.x, mouseY - p.y);
-    if (d < bestD) { bestD = d; best = i; bestP = p; }
+  // 1. Incoming projectiles — orbs and missiles are shootable (lasers aren't)
+  let best = null, bestD = HIT_RADIUS, bestP = null, bestList = null;
+  for (const list of [S2.orbs, S2.missiles]) {
+    for (let i = 0; i < list.length; i++) {
+      const p = s2Project(list[i].mesh.position);
+      if (!p) continue;
+      const d = Math.hypot(mouseX - p.x, mouseY - p.y);
+      if (d < bestD) { bestD = d; best = i; bestP = p; bestList = list; }
+    }
   }
-  if (best >= 0) {
-    const o = S2.orbs[best];
-    S2.orbs.splice(best, 1);
+  if (bestList) {
+    const o = bestList[best];
+    bestList.splice(best, 1);
     S2.scene.remove(o.mesh);
+    s2ParticleBurst(o.mesh.position, 10, 0xffbb55, 0.45, 1.3);
     explodeStars(bestP.x, bestP.y);
     playBoom();
     return;
@@ -537,6 +613,23 @@ function s2StartTheme() {
   if (!muted) playWithGestureFallback(s2Theme, () => S2.active && (S2.phase === 'approach' || S2.phase === 'boss'));
 }
 
+// Route the theme through an analyser so Ozamatron can dance to it.
+// Only safe once the shared AudioContext is running (first user gesture) —
+// wiring a MediaElementSource into a suspended context silences the track.
+function s2InitAnalyser() {
+  if (S2._analyser || !s2Theme) return;
+  try {
+    const c = getCtx();
+    if (c.state !== 'running') return;   // retried from the tick until it is
+    S2._mediaSrc = c.createMediaElementSource(s2Theme);
+    S2._analyser = c.createAnalyser();
+    S2._analyser.fftSize = 64;
+    S2._mediaSrc.connect(S2._analyser);
+    S2._analyser.connect(c.destination);
+    S2._fft = new Uint8Array(S2._analyser.frequencyBinCount);
+  } catch (e) {}
+}
+
 function s2StopTheme() {
   if (s2Theme) { s2Theme.pause(); s2Theme.currentTime = 0; }
 }
@@ -632,8 +725,9 @@ function s2Detonate() {
   s2StopTheme();   // the beeps and the blast take it from here
   clearTimeout(S2.socketTimer);
   clearTimeout(S2.attackTimer);
-  S2.orbs.forEach(o => S2.scene.remove(o.mesh));
-  S2.orbs = [];
+  [...S2.orbs, ...S2.lasers, ...S2.missiles].forEach(o => S2.scene.remove(o.mesh));
+  S2.orbs = []; S2.lasers = []; S2.missiles = [];
+  S2._laserQueue = 0;
 
   // Accelerating beeps, then the robot comes apart
   const gaps = [0, 320, 590, 810, 980, 1110, 1200];
@@ -687,19 +781,75 @@ function s2ShowVictory() {
   document.getElementById('galleryBtn').addEventListener('click', s2ReturnToGallery);
 }
 
-// === ATTACKS — gorilla throws: windup overhead, snap, orbs from the fist ===
+// === ATTACKS — a rotation: gorilla throws, laser bursts, homing missiles ===
 function s2AttackLoop() {
   if (S2.phase !== 'boss') return;
   const interval = OZ_ATTACK_MS * Math.pow(0.78, S2.bombs);
   S2.attackTimer = setTimeout(() => {
     if (S2.phase !== 'boss') return;
     if (!S2.throw && S2.beatT <= 0) {
-      S2.throw = { arm: S2._arms[S2._nextArm], t: 0, released: false };
-      S2._nextArm = 1 - S2._nextArm;
-      s2Tone(140, 0.3, 'sawtooth', 0.1);   // windup growl
+      const atk = ['throw', 'laser', 'throw', 'missiles'][S2._atkIdx++ % 4];
+      if (atk === 'throw') {
+        S2.throw = { arm: S2._arms[S2._nextArm], t: 0, released: false };
+        S2._nextArm = 1 - S2._nextArm;
+        s2Tone(140, 0.3, 'sawtooth', 0.1);   // windup growl
+      } else if (atk === 'laser') {
+        s2LaserBurst();
+      } else {
+        s2LaunchMissiles();
+      }
     }
     s2AttackLoop();
   }, interval);
+}
+
+// Laser burst: quick warm flash on the sprite, then fast bolts from the
+// screen — too fast to shoot, dodge only. A socket window follows.
+function s2LaserBurst() {
+  if (S2._ozMat) {
+    S2._ozMat.color.setHex(0xffc0a0);
+    setTimeout(() => { if (S2._ozMat && !S2._staticOn) S2._ozMat.color.setHex(0xffffff); }, 240);
+  }
+  S2._laserQueue = OZ_LASER_BOLTS;
+}
+
+function s2FireLaser() {
+  if (!S2.oz) return;
+  const [ox, oy] = s2SpriteLocal([0.495, 0.271]);   // fired from the screen
+  const origin = new THREE.Vector3(ox, oy, 0.8).applyMatrix4(S2.oz.matrixWorld);
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(0.35, 0.35, 6),
+    new THREE.MeshBasicMaterial({ color: 0xff3366, blending: THREE.AdditiveBlending, transparent: true, opacity: 0.95, depthWrite: false })
+  );
+  mesh.position.copy(origin);
+  const vel = S2.ship.position.clone().sub(origin).normalize();
+  vel.x += (Math.random() - 0.5) * 0.14;
+  vel.y += (Math.random() - 0.5) * 0.14;
+  vel.normalize().multiplyScalar(OZ_LASER_SPEED);
+  mesh.lookAt(origin.clone().add(vel));   // align the bolt with its path
+  S2.scene.add(mesh);
+  S2.lasers.push({ mesh, vel });
+  s2ParticleBurst(origin, 4, 0xff5588, 0.35, 1.1);   // muzzle flash
+  s2Tone(1200, 0.08, 'sawtooth', 0.09);
+}
+
+// Two homing missiles from the shoulders — slow, relentless, shootable
+function s2LaunchMissiles() {
+  if (!S2.oz) return;
+  for (const side of [-1, 1]) {
+    const [ox, oy] = s2SpriteLocal(side < 0 ? [0.200, 0.326] : [0.801, 0.326]);
+    const origin = new THREE.Vector3(ox, oy, 1.2).applyMatrix4(S2.oz.matrixWorld);
+    const body = new THREE.Mesh(
+      new THREE.ConeGeometry(0.55, 2.2, 6),
+      new THREE.MeshLambertMaterial({ color: 0xffaa33, emissive: 0x662200 })
+    );
+    body.position.copy(origin);
+    S2.scene.add(body);
+    // Kick outward first, then the homing steers them back in
+    const vel = new THREE.Vector3(side * 0.9, 0.35, 0.25).normalize().multiplyScalar(OZ_MISSILE_SPEED);
+    S2.missiles.push({ mesh: body, vel });
+  }
+  s2Tone(95, 0.4, 'sawtooth', 0.13);
 }
 
 // Animated every frame from s2UpdateOz while a throw is live
@@ -758,12 +908,34 @@ function s2ReleaseOrbs(arm) {
 
 // === DAMAGE / GAME OVER ===
 function s2ShipHit() {
+  if (S2.phase === 'gameover' || S2.phase === 'victory') return;
+  if (S2.shield) { s2ShieldBreak(); return; }   // the bubble tanks one hit
   S2.lives--;
   s2SetLives();
   s2Flash('rgba(255,0,0,0.22)');
   playBoom();
   S2.shake = 14;
   if (S2.lives <= 0) s2GameOver();
+}
+
+function s2ShieldBreak() {
+  S2.shield = false;
+  S2.shieldT = S2_SHIELD_FR;
+  if (S2._shieldMesh) S2._shieldMesh.visible = false;
+  s2ParticleBurst(S2.ship.position, 16, 0x55ddff, 0.5, 1.6);
+  s2Flash('rgba(60,200,255,0.20)');
+  s2Tone(520, 0.12, 'square', 0.14);
+  setTimeout(() => s2Tone(260, 0.18, 'square', 0.12), 90);
+  S2.shake = Math.max(S2.shake, 8);
+  s2SetLives();
+}
+
+function s2ShieldRestore() {
+  S2.shield = true;
+  if (S2._shieldMesh) S2._shieldMesh.visible = true;
+  s2Tone(660, 0.09, 'sine', 0.1);
+  setTimeout(() => s2Tone(990, 0.12, 'sine', 0.1), 100);
+  s2SetLives();
 }
 
 function s2GameOver() {
@@ -787,8 +959,10 @@ function s2GameOver() {
 function s2Retry() {
   const overlay = document.getElementById('gameOverScreen');
   if (overlay) overlay.remove();
-  [...S2.drones, ...S2.asteroids, ...S2.orbs].forEach(o => S2.scene.remove(o.mesh));
-  S2.drones = []; S2.asteroids = []; S2.orbs = [];
+  [...S2.drones, ...S2.asteroids, ...S2.orbs, ...S2.lasers, ...S2.missiles].forEach(o => S2.scene.remove(o.mesh));
+  S2.drones = []; S2.asteroids = []; S2.orbs = []; S2.lasers = []; S2.missiles = [];
+  S2.shield = true; S2.shieldT = 0; S2._laserQueue = 0;
+  if (S2._shieldMesh) S2._shieldMesh.visible = true;
   s2RemoveOz();
   if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
   S2.phase = 'flight';
@@ -890,6 +1064,57 @@ function stage2Tick() {
     }
   }
 
+  // Shield recharge + idle shimmer
+  if (!S2.shield && S2.shieldT > 0 && --S2.shieldT === 0) s2ShieldRestore();
+  if (S2.shield && S2._shieldMesh) {
+    S2._shieldMesh.material.opacity = 0.11 + 0.06 * Math.sin(S2.frame * 0.11);
+  }
+
+  // Laser bursts fire one bolt every 6 frames until the queue drains
+  if (S2._laserQueue > 0 && S2.frame % 6 === 0) {
+    S2._laserQueue--;
+    s2FireLaser();
+    if (S2._laserQueue === 0) s2OpenSocketWindow();   // exposed after the burst
+  }
+
+  // Lasers: straight and fast, trailing sparks
+  for (let i = S2.lasers.length - 1; i >= 0; i--) {
+    const l = S2.lasers[i];
+    l.mesh.position.add(l.vel);
+    if (S2.frame % 2 === 0) s2Particle(l.mesh.position, new THREE.Vector3(0, 0, 0), 0.9, 0xff4477, 10);
+    if (l.mesh.position.distanceTo(ship.position) < 2.2) {
+      s2ParticleBurst(l.mesh.position, 8, 0xff5577, 0.4, 1.2);
+      S2.scene.remove(l.mesh);
+      S2.lasers.splice(i, 1);
+      s2ShipHit();
+      continue;
+    }
+    if (l.mesh.position.z > 4) { S2.scene.remove(l.mesh); S2.lasers.splice(i, 1); }
+  }
+
+  // Missiles: home on the ship with limited turn, exhaust trail behind
+  for (let i = S2.missiles.length - 1; i >= 0; i--) {
+    const m = S2.missiles[i];
+    const want = ship.position.clone().sub(m.mesh.position).normalize().multiplyScalar(OZ_MISSILE_SPEED);
+    m.vel.lerp(want, OZ_MISSILE_TURN);
+    m.mesh.position.add(m.vel);
+    m.mesh.lookAt(m.mesh.position.clone().add(m.vel));
+    m.mesh.rotateX(Math.PI / 2);   // cone nose forward
+    if (S2.frame % 2 === 0) {
+      s2Particle(m.mesh.position, m.vel.clone().multiplyScalar(-0.25), 1.3, 0xffaa44, 16);
+    }
+    if (m.mesh.position.distanceTo(ship.position) < 2.4) {
+      s2ParticleBurst(m.mesh.position, 12, 0xffaa33, 0.5, 1.4);
+      S2.scene.remove(m.mesh);
+      S2.missiles.splice(i, 1);
+      s2ShipHit();
+      continue;
+    }
+    if (m.mesh.position.z > 6) { S2.scene.remove(m.mesh); S2.missiles.splice(i, 1); }
+  }
+
+  s2UpdateParticles();
+
   if (S2.oz) s2UpdateOz();
 
   // Victory debris flies apart then vanishes
@@ -958,11 +1183,31 @@ function s2UpdateOz() {
     if (t >= 1) s2OzArrived();
   }
 
-  // Idle menace: heavy bob, slight sway and roll (small angles — flat sprite)
+  // === THE DANCE — he moves to his own theme song ===
+  // Bass energy from the analyser drives the bounce; energy spikes count as
+  // beats and trigger alternating side-rocks and a little scale pop.
   const f = S2.frame;
-  oz.position.y = 2 + Math.sin(f * 0.017) * 2.2;
-  oz.rotation.y = Math.sin(f * 0.008) * 0.07;
-  oz.rotation.z = Math.sin(f * 0.011) * 0.03;
+  if (audioCtx) s2InitAnalyser();   // audioCtx is script.js's global, set on first shot
+  let bass = 0;
+  if (S2._analyser && !muted && s2Theme && !s2Theme.paused) {
+    S2._analyser.getByteFrequencyData(S2._fft);
+    bass = (S2._fft[1] + S2._fft[2] + S2._fft[3]) / 765;
+    S2._bassAvg = S2._bassAvg * 0.985 + bass * 0.015;
+    if (S2._beatCd > 0) S2._beatCd--;
+    if (bass > Math.max(0.22, S2._bassAvg * 1.3) && S2._beatCd <= 0) {
+      S2._beatCd = 16;
+      S2._beatPulse = 1;
+      S2._beatSide = -S2._beatSide;
+    }
+  }
+  S2._bassS += (bass - S2._bassS) * 0.25;
+  S2._beatPulse *= 0.88;
+
+  const groove = S2._bassS;
+  oz.position.y = 2 + Math.sin(f * 0.017) * 1.2 + groove * 3.2;                // bounce
+  oz.rotation.y = Math.sin(f * 0.008) * 0.06;
+  oz.rotation.z = Math.sin(f * 0.011) * 0.02 + S2._beatSide * S2._beatPulse * 0.06;  // rock
+  oz.scale.setScalar(1 + S2._beatPulse * 0.045);                               // pop
 
   // Throw lunge recovery — ease back to the hold line
   if (S2.phase === 'boss') {
@@ -986,7 +1231,9 @@ function s2UpdateOz() {
     for (const a of S2._arms) {
       if (S2.throw && S2.throw.arm === a) continue;
       const ph = a.side < 0 ? 0 : Math.PI * 0.7;
-      const target = a.side * (OZ_ARM.rest + Math.sin(f * 0.03 + ph) * OZ_ARM.sway);
+      // Sway swells with the bass; beats pump the alternating arm inboard
+      const pump = (S2._beatSide === a.side ? 1 : 0.2) * S2._beatPulse * 0.5;
+      const target = a.side * (OZ_ARM.rest + Math.sin(f * 0.03 + ph) * OZ_ARM.sway * (1 + groove * 3)) - a.side * pump;
       a.mesh.rotation.z += (target - a.mesh.rotation.z) * 0.08;
     }
   }
@@ -1030,7 +1277,7 @@ function s2SetLives() {
       lv = armed;
     }
   }
-  if (lv) lv.textContent = '♥'.repeat(Math.max(0, S2.lives)) + '♡'.repeat(Math.max(0, S2_LIVES - S2.lives));
+  if (lv) lv.textContent = (S2.shield ? '⛨' : '◌') + '♥'.repeat(Math.max(0, S2.lives)) + '♡'.repeat(Math.max(0, S2_LIVES - S2.lives));
 }
 
 function s2Banner(text) {

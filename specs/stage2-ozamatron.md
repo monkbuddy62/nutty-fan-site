@@ -84,12 +84,30 @@ This is the second boss and the game's current ending.
 - A planted bomb leaves the component **smoldering red** (dim blinking glow; the screen's face
   tints red), fills a HUD slot, flashes green, and makes Ozamatron angrier: volley interval
   multiplies by **0.78 per bomb** and each volley gains an orb (1 → 2 → 3).
-- **Attacks are thrown, ape-style.** The attack timer starts a throw cycle (`OZ_THROW`): the arm
-  winds up overhead over 26 frames — **the wind-up is the telegraph** — quivers for 8, then snaps
-  down in 6, releasing orbs **from the fist** mid-snap while the body lunges forward. Arms
-  alternate. Orbs are shootable, like Jake's panels; an orb reaching the ship costs a life and
-  shakes the camera. The release point (a raised fist) is far from every socket at the moment of
-  release — shot priority is orbs-first, so an orb born next to a socket would shield it.
+- **Attacks rotate: throw → laser → throw → missiles.** The attack timer walks that cycle at
+  `OZ_ATTACK_MS` (× 0.78 per bomb):
+  - **Throws, ape-style** (`OZ_THROW`): the arm winds up overhead over 26 frames — **the wind-up
+    is the telegraph** — quivers for 8, then snaps down in 6, releasing orbs **from the fist**
+    mid-snap while the body lunges. Arms alternate. Orbs are shootable; the raised-fist release
+    point is far from every socket (shot priority is projectiles-first).
+  - **Laser bursts**: the sprite flashes warm, then `OZ_LASER_BOLTS` fast bolts fire from the
+    screen at `OZ_LASER_SPEED`, one every 6 frames, with muzzle-flash and trail particles. Too
+    fast to shoot — dodge only.
+  - **Missiles**: two from the shoulders, kicked outward then homing at `OZ_MISSILE_SPEED` with
+    `OZ_MISSILE_TURN` steering, exhaust-trail particles behind. Shootable, like orbs.
+  - A vulnerability window opens after each **throw** and after each **laser burst** (not after
+    missiles — they linger).
+- **The ship has a shield**: a soft additive bubble that tanks exactly one hit from anything
+  (orb, laser, missile, asteroid), then shatters in a particle burst and recharges over
+  `S2_SHIELD_FR` (~9s) with a two-note chime on restore. HUD shows `⛨` when up, `◌` while
+  recharging, before the hearts.
+- **Particles**: a pooled system (`S2_PARTICLES` additive glow sprites, 130 desktop / 70 mobile)
+  drives missile exhaust, laser trails, muzzle flashes, impact sparks, and the shield break —
+  velocity + drag + fade + grow, zero allocations at runtime.
+- **He dances to his own theme.** The theme routes through a WebAudio analyser (wired lazily once
+  the shared AudioContext is running); low-bin bass energy drives his bounce, energy spikes count
+  as beats and trigger alternating side-rocks, a small scale pop, and arm pumps. With no analyser
+  (muted, or before the first tap) he falls back to the sine idle.
 - **Chest-beat rage:** each planted bomb triggers a 40-frame alternating chest-beat with low
   thump tones and camera shake; throws pause while he rages.
 - Lives: 3, shown in the same repurposed WPNS→LIVES HUD cell as the Jake fight.
@@ -128,8 +146,12 @@ All in the config block at the top of `stage2.js`.
 | `OZ_SOCKET_OPEN_MS` | 1500 / 1900 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
 | `OZ_FLASH_SIZE` | 11 u | Disc glow plane size. |
 | `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
-| `OZ_ATTACK_MS` | 3400 × 0.78^bombs | Volley cadence, angrier per bomb. |
+| `OZ_ATTACK_MS` | 3000 × 0.78^bombs | Attack cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
+| `S2_SHIELD_FR` | 540 frames (~9s) | Shield recharge after a tanked hit. |
+| `OZ_LASER_SPEED` / `OZ_LASER_BOLTS` | 4.6 u/f, 3 | Laser burst — dodge-only pressure. |
+| `OZ_MISSILE_SPEED` / `OZ_MISSILE_TURN` | 0.95 u/f, 0.05 | Homing missiles — slow but persistent. |
+| `S2_PARTICLES` | 130 / 70 mobile | Particle pool size. |
 | `OZ_HOLD_Z` | −70 | Where the robot parks — fills the view without clipping. |
 | `OZ_APPROACH_FR` | 420 frames | Length of the staged arrival (~7s). |
 | `OZ_SIZE` | 55 u | Billboard plane size (square, matches the square art). |
