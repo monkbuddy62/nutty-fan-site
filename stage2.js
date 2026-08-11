@@ -531,7 +531,10 @@ function s2StartTheme() {
     s2Theme.volume = 0.55;
   }
   s2Theme.currentTime = 0;
-  if (!muted) s2Theme.play().catch(() => {});
+  // The ?fight=ozamatron warp reaches the approach with no user gesture yet,
+  // so the first play() is autoplay-blocked — the fallback starts the song
+  // on the player's first tap
+  if (!muted) playWithGestureFallback(s2Theme, () => S2.active && (S2.phase === 'approach' || S2.phase === 'boss'));
 }
 
 function s2StopTheme() {

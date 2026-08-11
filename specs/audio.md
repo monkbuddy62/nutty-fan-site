@@ -20,9 +20,10 @@ Three `Audio`-element loops, each owned by its phase, never overlapping:
 | `boss/ozamatron-theme.mp3` | Ozamatron approach → third bomb or death | 0.55 | [stage2-ozamatron.md](stage2-ozamatron.md) |
 
 The gallery theme **pauses without rewinding** — after Jake it resumes where it left off. The boss
-themes restart from the top each encounter. The gallery theme's initial `play()` at page load is
-usually blocked by autoplay policy; a one-shot `mousedown`/`touchstart` fallback starts it on the
-first tap. The mute button pauses/resumes all three in place. The stage-2 flight phase is
+themes restart from the top each encounter. Any theme's `play()` can be rejected by autoplay
+policy when no trusted gesture has happened yet (page load; the `?fight=` debug warps) — every
+start goes through `playWithGestureFallback()`, which retries on the next `mousedown`/`touchstart`
+if that theme's phase is still active by then. The mute button pauses/resumes all three in place. The stage-2 flight phase is
 deliberately music-free.
 
 ## Synthesised SFX

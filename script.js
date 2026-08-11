@@ -177,11 +177,32 @@ function playNuttyClip() {
   currentClip = a;
 }
 
+// === THEME PLAYBACK — shared autoplay-policy fallback ===
+// play() rejects until the page has a trusted gesture (?fight= warps and the
+// initial page load both hit this). On rejection, retry on the next tap —
+// but only if the requesting phase still wants its music by then.
+function playWithGestureFallback(audio, stillWanted) {
+  audio.play().catch(() => {
+    // Keep retrying on taps until one actually starts playback — a single
+    // rejected retry must not consume the fallback
+    const cleanup = () => {
+      document.removeEventListener('mousedown', kick);
+      document.removeEventListener('touchstart', kick);
+    };
+    const kick = () => {
+      if (!stillWanted()) { cleanup(); return; }
+      if (muted) return;
+      audio.play().then(cleanup).catch(() => {});
+    };
+    document.addEventListener('mousedown', kick);
+    document.addEventListener('touchstart', kick);
+  });
+}
+
 // === GALLERY THEME — plays whenever the gallery itself is on screen:
 // game start, the post-Jake intermission, and the post-stage-2 return.
 // Pauses (keeping its place) for boss fights and stage 2.
-let galleryTheme        = null;
-let galleryThemePending = false;
+let galleryTheme = null;
 
 function galleryActive() {
   return !boss.active && !(window.STAGE2 && STAGE2.active) && !document.getElementById('gameOverScreen');
@@ -194,25 +215,10 @@ function startGalleryTheme() {
     galleryTheme.volume = 0.45;
   }
   if (muted) return;
-  galleryTheme.play().then(() => { galleryThemePending = false; }).catch(() => {
-    // Autoplay is blocked until the first tap — start it on that tap instead
-    if (galleryThemePending) return;
-    galleryThemePending = true;
-    const kick = () => {
-      document.removeEventListener('mousedown', kick);
-      document.removeEventListener('touchstart', kick);
-      if (galleryThemePending && galleryActive() && !muted) {
-        galleryThemePending = false;
-        galleryTheme.play().catch(() => {});
-      }
-    };
-    document.addEventListener('mousedown', kick);
-    document.addEventListener('touchstart', kick);
-  });
+  playWithGestureFallback(galleryTheme, galleryActive);
 }
 
 function stopGalleryTheme() {
-  galleryThemePending = false;
   if (galleryTheme) galleryTheme.pause();   // no rewind — it resumes where it left off
 }
 
@@ -944,7 +950,7 @@ function startBossTheme() {
     bossTheme.volume = 0.55;
   }
   bossTheme.currentTime = 0;
-  if (!muted) bossTheme.play().catch(() => {});
+  if (!muted) playWithGestureFallback(bossTheme, () => boss.active);
 }
 
 function stopBossTheme() {
