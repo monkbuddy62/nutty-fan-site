@@ -65,6 +65,9 @@ z-fighting flicker (commit c2d18e0).
   feel), tight for big ones you can simply hit. Anywhere on a photo — corners of tilted ones
   included — always registers. Nearest-by-distance wins; one shot kills one target. A shot that
   hits nothing is still a shot — it plays the pew and draws the flash ring.
+- **Wounds:** photos wider than 180px have a 45% chance to survive their first hit with a bullet
+  hole punched through at the cursor (no score, no streak; the photo is kicked tumbling away).
+  The next hit always kills. See [visual-effects.md](visual-effects.md).
 - **Autofire:** mouse-down or touch-start fires immediately, then repeats every `FIRE_RATE_MS`
   until release. Holding is the intended way to play.
 - **Touch:** each tap sets the cursor position from the touch point before firing, so taps hit where

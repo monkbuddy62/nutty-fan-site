@@ -370,22 +370,104 @@ function explodeShatter(target) {
   }
 }
 
-const EXPLOSION_STYLES = ['dust', 'stars', 'shatter'];
+// Radial glass-shatter: the photo breaks into K irregular shards that fan out
+// from the exact impact point — every break is different, and the crack
+// pattern radiates from where the bullet actually landed.
+function explodeShards(target, hx, hy) {
+  const imgEl = target.el.querySelector('img');
+  const bw = target.w, bh = target.h;
+  const ox = target.screenX - bw / 2, oy = target.screenY - bh / 2;
+  const rotA = target.rot * Math.PI / 180;
 
-function triggerExplosion(target) {
+  // Impact point in the photo's own (unrotated) frame, clamped inward
+  const dx = (hx ?? target.screenX) - target.screenX;
+  const dy = (hy ?? target.screenY) - target.screenY;
+  const lx =  dx * Math.cos(rotA) + dy * Math.sin(rotA);
+  const ly = -dx * Math.sin(rotA) + dy * Math.cos(rotA);
+  const ix = Math.max(bw * 0.15, Math.min(bw * 0.85, bw / 2 + lx));
+  const iy = Math.max(bh * 0.15, Math.min(bh * 0.85, bh / 2 + ly));
+
+  const K = 9;
+  const angs = [];
+  for (let i = 0; i < K; i++) angs.push((i / K) * Math.PI * 2 + (Math.random() - 0.5) * 0.55);
+  angs.sort((a, b) => a - b);
+
+  // Ray from the impact point to the rect edge (spilling slightly past it)
+  const edge = a => {
+    const ex = Math.cos(a), ey = Math.sin(a);
+    let t = Infinity;
+    if (ex > 0) t = Math.min(t, (bw - ix) / ex); else if (ex < 0) t = Math.min(t, -ix / ex);
+    if (ey > 0) t = Math.min(t, (bh - iy) / ey); else if (ey < 0) t = Math.min(t, -iy / ey);
+    t *= 1.08;
+    return [ix + ex * t, iy + ey * t];
+  };
+
+  for (let i = 0; i < K; i++) {
+    const a1 = angs[i];
+    const a2 = i + 1 < K ? angs[i + 1] : angs[0] + Math.PI * 2;
+    const [x1, y1] = edge(a1);
+    const [x2, y2] = edge(a2);
+    const midA = (a1 + a2) / 2 + rotA;              // fly direction, world space
+    const flyD = 150 + Math.random() * 280;
+    const dur  = 0.5 + Math.random() * 0.4;
+    const rot  = (Math.random() - 0.5) * 440;
+
+    const piece = document.createElement('div');
+    Object.assign(piece.style, {
+      position: 'fixed', left: ox + 'px', top: oy + 'px',
+      width: bw + 'px', height: bh + 'px',
+      backgroundImage: `url(${imgEl.src})`,
+      backgroundSize: `${bw}px ${bh}px`,
+      clipPath: `polygon(${ix}px ${iy}px, ${x1}px ${y1}px, ${x2}px ${y2}px)`,
+      transformOrigin: `${bw / 2}px ${bh / 2}px`,
+      transform: `rotate(${target.rot}deg)`,
+      pointerEvents: 'none', zIndex: '200',
+      transition: `transform ${dur}s cubic-bezier(0.2, 0.6, 0.5, 1), opacity ${dur * 0.7}s ease-in ${dur * 0.3}s`,
+      opacity: '1',
+    });
+    document.body.appendChild(piece);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      piece.style.transform =
+        `translate(${Math.cos(midA) * flyD}px, ${Math.sin(midA) * flyD + 55}px) rotate(${target.rot + rot}deg) scale(0.92)`;
+      piece.style.opacity = '0';
+    }));
+    setTimeout(() => piece.remove(), dur * 1000 + 150);
+  }
+
+  // Hot embers off the impact point
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 50 + Math.random() * 130;
+    spawnParticle(hx ?? target.screenX, hy ?? target.screenY, {
+      width: '3px', height: '3px',
+      background: '#ffcc66', borderRadius: '50%',
+      boxShadow: '0 0 8px #ffaa33',
+      transform: 'translate(-50%,-50%)', opacity: '1',
+    }, Math.cos(a) * d, Math.sin(a) * d, 0.45 + Math.random() * 0.3, 0);
+  }
+}
+
+function triggerExplosion(target, hx, hy) {
   const el = target.el;
   const cx = target.screenX;
   const cy = target.screenY;
-
-  const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
-  if (style === 'dust')         explodeDust(cx, cy);
-  else if (style === 'stars')   explodeStars(cx, cy);
-  else if (style === 'shatter') explodeShatter(target);
 
   const flash = document.createElement('div');
   flash.className = 'kill-flash';
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 220);
+
+  // Shard break-up is the star of the show; dust and stars stay as variety
+  const imgEl = el.querySelector('img');
+  const roll = Math.random();
+  if (roll < 0.55 && imgEl && imgEl.src) {
+    explodeShards(target, hx, hy);
+    el.remove();   // the shards ARE the photo now
+    setTimeout(spawnTarget, 200 + Math.random() * 600);
+    return;
+  }
+  if (roll < 0.8) explodeStars(cx, cy);
+  else            explodeDust(cx, cy);
 
   // Snap to fixed position so the shrink-out happens in place
   const hw = target.w / 2, hh = target.h / 2;
@@ -812,9 +894,62 @@ function fadeTarget(t) {
   }, 2600);
 }
 
+// Meaty through-and-through impact
+function playThunk() {
+  if (muted) return;
+  try {
+    const c    = getCtx();
+    const osc  = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(240, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(70, c.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.16, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.12);
+    osc.start(c.currentTime); osc.stop(c.currentTime + 0.13);
+  } catch (e) {}
+}
+
+// A bullet punches clean through: a hole appears at the hit point, the photo
+// takes an impact kick and keeps flying — wounded. The next hit kills.
+function punchHole(t, hx, hy) {
+  t.hasHole = true;
+
+  // Hit point in element units (the el is BASE_PX wide pre-transform)
+  const a = t.rot * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const dx = hx - t.screenX, dy = hy - t.screenY;
+  const lx =  dx * cos + dy * sin;
+  const ly = -dx * sin + dy * cos;
+  const s  = (t.w / BASE_PX) || 1;
+  const ex = BASE_PX / 2 + lx / s;
+  const ey = (BASE_PX * (t.hRatio || 1)) / 2 + ly / s;
+  const r  = 26 + Math.random() * 10;   // element units — hole scales with the photo
+  const m  = `radial-gradient(circle at ${ex}px ${ey}px, transparent ${r}px, black ${r + 9}px)`;
+  t.el.style.webkitMaskImage = m;
+  t.el.style.maskImage = m;
+
+  // Impact physics: kicked away from the hit point, set tumbling
+  const d = Math.hypot(dx, dy) || 1;
+  t.vx += (-dx / d) * 2.4;
+  t.vy += (-dy / d) * 2.4;
+  t.rotSpeed = Math.max(-2.5, Math.min(2.5, t.rotSpeed + (Math.random() - 0.5) * 3));
+
+  explodeDust(hx, hy);
+  playThunk();
+}
+
 // === SHOOT — explode immediately in place ===
 function shootTarget(target) {
   if (target.dead) return;
+
+  // Big photos sometimes take a through-and-through first — hole, jolt,
+  // still flying. No score for a wound; the follow-up shot kills.
+  if (!target.hasHole && target.w > 180 && !boss.sucking && Math.random() < 0.45) {
+    punchHole(target, mouseX, mouseY);
+    return;
+  }
+
   target.dead = true;
   if (target.fadeTimer) { clearTimeout(target.fadeTimer); target.fadeTimer = null; }
   targets.splice(targets.indexOf(target), 1);
@@ -832,7 +967,7 @@ function shootTarget(target) {
   playNuttyClip();
   target._dx = 0;
   target._dy = 0;
-  triggerExplosion(target);
+  triggerExplosion(target, mouseX, mouseY);
 }
 
 // === GAME LOOP ===
