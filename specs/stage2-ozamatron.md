@@ -43,11 +43,15 @@ This is the second boss and the game's current ending.
 
 ### Ozamatron
 
-- A ~35-unit robot built from boxes (torso, head, glowing red eyes, shoulder+arm groups, legs) —
-  transformer-scale, no transforming. Glides in from the fog over ~5s, then holds at `OZ_HOLD_Z`,
-  bobbing and swinging its arms. Name plate reuses the `#boss-hud` styling with **3 bomb slots**
-  instead of an HP bar.
-- **Bomb sockets ×3** — chest core, left shoulder, right shoulder. One at a time opens for
+- A **billboard sprite**: one `OZ_SIZE` (38-unit) textured plane showing `boss/ozamatron.png` — a
+  fruit-armored mecha with a CRT television head ("FRUIT-VISION CRT-86"), generated art with the
+  background keyed out (1024² RGBA). Transformer-scale, no transforming. Glides in from the fog
+  over ~5s, then holds at `OZ_HOLD_Z`, bobbing with slight sway/roll (small angles — it's flat).
+  Name plate reuses the `#boss-hud` styling with **3 bomb slots** instead of an HP bar.
+- Anchor points (sockets, orb muzzles, debris placement) are `OZ_ANCHORS`/`OZ_PARTS` image-fraction
+  coordinates measured off the art — if the art is regenerated, re-measure them.
+- **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself, each with a
+  3D ring+core marker floating just in front of the art. One at a time opens for
   `OZ_SOCKET_OPEN_MS` (glows green, pulses), then everything closes for `OZ_SOCKET_GAP_MS` before
   a random un-bombed socket opens next.
   - **Timing:** a shot only plants while the socket is open.
@@ -57,16 +61,19 @@ This is the second boss and the game's current ending.
 - A planted bomb turns the socket into a blinking red charge, fills a HUD slot, flashes green, and
   makes Ozamatron angrier: volley interval multiplies by **0.78 per bomb** and each volley gains
   an orb (1 → 2 → 3).
-- **Attacks:** telegraphed (eyes flash yellow 420ms), then orange orbs launch **from the eyes**
-  aimed at the ship's position. Orbs are shootable, like Jake's panels; an orb reaching the ship
-  costs a life and shakes the camera. Orbs deliberately do not spawn at the shoulders — shot
-  priority is orbs-first, so an orb born next to a socket would shield it.
+- **Attacks:** telegraphed (the whole sprite flashes warm for 420ms), then orange orbs launch
+  **from the antenna tips** aimed at the ship's position. Orbs are shootable, like Jake's panels;
+  an orb reaching the ship costs a life and shakes the camera. Orbs deliberately spawn far from
+  every socket — shot priority is orbs-first, so an orb born next to a socket would shield it.
 - Lives: 3, shown in the same repurposed WPNS→LIVES HUD cell as the Jake fight.
 
 ### Victory
 
-Third bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white flash, and every
-part of the robot flies apart as debris. A **victory screen** (*OZAMATRON DESTROYED / PNUT SAVES
+Third bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white flash, and the
+robot comes apart into its **actual body parts** — nine debris planes cut from a second texture
+(`boss/ozamatron-parts.png`, a generated exploded-parts sheet keyed the same way): TV head,
+antenna cap, both shoulder discs, arms, torso core, legs — each flung outward from its true
+position on the body. A **victory screen** (*OZAMATRON DESTROYED / PNUT SAVES
 THE GALAXY… FOR NOW*) offers `[ RETURN TO THE GALLERY ]`, which restores the WPNS cell, brings the
 2D starfield back, and respawns the gallery. `STAGE2.done` prevents any retrigger; the gallery is
 endless from there.
@@ -98,6 +105,9 @@ All in the config block at the top of `stage2.js`.
 | `OZ_ATTACK_MS` | 3400 × 0.78^bombs | Volley cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
 | `OZ_HOLD_Z` | −85 | Where the robot parks — fills the view without clipping. |
+| `OZ_SIZE` | 38 u | Billboard plane size (square, matches the square art). |
+| `OZ_ANCHORS` | image fractions | Socket + antenna positions measured off the art. |
+| `OZ_PARTS` | 9 uv rects | Parts-sheet crops + body anchors for the detonation debris. |
 
 ## Implementation
 
@@ -122,9 +132,12 @@ All in the config block at the top of `stage2.js`.
 
 ## Open questions
 
-- **Every model is a placeholder.** Ship, drones, asteroids, and Ozamatron are primitives. Real
-  models (GLTF?) need a loader decision — r140 UMD has no bundled GLTFLoader; vendoring the matching
-  example loader is the likely path.
+- **Ship, drones, and asteroids are still placeholder primitives.** Ozamatron is now real art
+  (billboard sprite), but the rest awaits either more sprite art or a model-loader decision —
+  r140 UMD has no bundled GLTFLoader; vendoring the matching example loader is the likely path.
+- **The boss art source files** are Gemini-generated (`robot.png` full body, `robot_sprite.png`
+  parts sheet, in the user's Downloads). The repo carries only the keyed 1024² PNGs; the keying
+  scripts were flood-fill from image borders so interior blacks/grays survived.
 - **Jake still can't be refought on a win path**, and stage 2 ends in an endless gallery. Whether
   score 30+ should loop stages, escalate, or roll credits is undecided.
 - **Stage-2 retry keeps score.** Deliberate (retrying the hard part shouldn't cost the run), but it
