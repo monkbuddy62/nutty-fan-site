@@ -62,7 +62,9 @@ When the last note resolves (+1.4s), Patticus crumples (shades knocked askew), a
 and a four-note fanfare play over a Nutty clip, and the victory screen shows: *PATTICUS MAXIMUS
 OUT-DANCED*, a rating — FLAWLESS FUNK (no GOODs or MISSes) / CERTIFIED GROOVE MACHINE (acc ≥ 90%)
 / FUNKY ENOUGH (≥ 65%) / SLOPPY, BUT THE GALAXY IS SAVED — the PERFECT/GOOD/MISS/combo tally, and
-`[ RETURN TO THE GALLERY ]`. Accuracy = (perfect + good/2) / total notes.
+`[ RETURN TO THE GALLERY ]`. Accuracy = (perfect + good/2) / total notes. The gallery button is
+**invisible and unclickable for the first `S3_BTN_DELAY_MS` (15s)** of the victory screen, then
+fades in — the win (and the song) get their moment before an exit is offered.
 
 **The mixdown keeps playing** (it loops): the victory screen doesn't stop it, and returning to
 the gallery respawns targets **without** restarting the gallery theme — `galleryActive()` treats
@@ -92,6 +94,7 @@ All in the config block at the top of `stage3.js`.
 | `S3_PERFECT_S` / `S3_GOOD_S` | 0.10s / 0.22s | Judgment windows; GOOD's edge is also the miss line. |
 | `S3_LEAD_BEATS` | 16 | Patticus solo before the first arrow (~7s of music). |
 | `S3_MEASURES` | 36 | Routine length — last note ~73s in, victory by ~1:15; the song plays on after. |
+| `S3_BTN_DELAY_MS` | 15000 | How long the victory screen withholds the RETURN TO THE GALLERY button. |
 | hype deltas | +2 / +1 / −4 | PERFECT / GOOD / MISS effect on the (cosmetic) CROWD HYPE meter. |
 
 ## Implementation

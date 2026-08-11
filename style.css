@@ -1008,6 +1008,10 @@ body::after {
 }
 .dance-stats.dance-outro { color: rgba(0, 255, 200, 0.6); margin-bottom: 20px; }
 
+/* The gallery button sits out the first S3_BTN_DELAY_MS of the victory screen */
+.dance-return { transition: opacity 0.9s; }
+.dance-return.btn-delayed { opacity: 0; pointer-events: none; }
+
 @media (max-height: 640px) {
   #patticus { transform: scale(0.7); transform-origin: top center; top: 11vh; }
   .disco-ball { font-size: 32px; }

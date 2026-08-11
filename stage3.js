@@ -15,6 +15,7 @@ const S3_TRAVEL_S   = IS_MOBILE ? 2.0 : 1.8;  // arrow flight time, spawn → re
 const S3_PERFECT_S  = 0.10;                   // |tap − beat| for PERFECT
 const S3_GOOD_S     = 0.22;                   // …for GOOD; outside this is a whiff/miss
 const S3_LEAD_BEATS = 16;                     // Patticus solo-grooves before the first arrow
+const S3_BTN_DELAY_MS = 15000;                // victory screen holds the gallery button back this long
 const S3_MEASURES   = 36;                     // chart length (4/4) — ends ~73s in, song plays on
 const S3_ARROW_ROT  = [-90, 180, 0, 90];      // ▲ rotated per lane: ← ↓ ↑ →
 const S3_LANE_KEYS  = { ArrowLeft: 0, KeyA: 0, ArrowDown: 1, KeyS: 1,
@@ -361,10 +362,13 @@ function s3ShowVictory() {
       <div class="gameover-sub victory-sub">${rating}</div>
       <div class="dance-stats">PERFECT ${S3.perfect} · GOOD ${S3.good} · MISS ${S3.miss} · MAX COMBO ${S3.maxCombo}</div>
       <div class="dance-stats dance-outro">PNUT SAVES THE GALAXY — AND THE BEAT PLAYS ON</div>
-      <button class="gameover-btn" id="dance-galleryBtn">[ RETURN TO THE GALLERY ]</button>
+      <button class="gameover-btn dance-return btn-delayed" id="dance-galleryBtn">[ RETURN TO THE GALLERY ]</button>
     </div>`;
   document.body.appendChild(overlay);
-  document.getElementById('dance-galleryBtn').addEventListener('click', s3ReturnToGallery);
+  const btn = document.getElementById('dance-galleryBtn');
+  btn.addEventListener('click', s3ReturnToGallery);
+  // Let the win — and the song — have their moment before offering the exit
+  setTimeout(() => btn.classList.remove('btn-delayed'), S3_BTN_DELAY_MS);
 }
 
 // The mixdown keeps playing from here — it owns the audio for the rest of the
