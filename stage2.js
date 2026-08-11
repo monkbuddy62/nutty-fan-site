@@ -21,7 +21,6 @@ const S2_DRONE_SPAWN_FR  = 30;                    // frames between drone spawn 
 
 const OZ_BOMBS_NEEDED    = 3;
 const OZ_SOCKET_OPEN_MS  = IS_MOBILE ? 1900 : 1500; // vulnerability window (timing)
-const OZ_SOCKET_GAP_MS   = 1100;                  // all-closed pause between windows
 const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (accuracy)
 const OZ_ATTACK_MS       = 3400;                  // orb volley cadence, shrinks per bomb
 const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
@@ -30,12 +29,16 @@ const OZ_APPROACH_FR     = 300;                   // frames of approach glide (~
 const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, arms erased
 const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet (arms + debris)
 const OZ_SIZE            = 55;                    // sprite plane size in world units (square)
-// Socket anchor points as fractions of the sprite image (x→right, y→down)
-const OZ_ANCHORS = {
-  screen:    [0.495, 0.271],   // the FRUIT-VISION CRT face
-  shoulderL: [0.200, 0.326],   // watermelon disc, left
-  shoulderR: [0.801, 0.326],   // watermelon disc, right
-};
+// Bomb sockets: the CRT screen + both watermelon shoulder discs. There are
+// no 3D markers — the component itself flashes while its window is open
+// (discs get an additive glow, the TV face pulses green), and a window opens
+// right after each throw: dodge the fruit, then punish.
+const OZ_SOCKETS = [
+  { kind: 'screen', anchor: [0.495, 0.271] },   // the FRUIT-VISION CRT face
+  { kind: 'discL',  anchor: [0.200, 0.326] },   // watermelon disc, left
+  { kind: 'discR',  anchor: [0.801, 0.326] },   // watermelon disc, right
+];
+const OZ_FLASH_SIZE = 11;      // disc glow plane size, world units
 // Overlay arms: separate planes pivoted at the shoulders so Ozamatron can
 // wind up and hurl orbs like a gorilla. The baked-in arms were erased from
 // the body texture; these use the bent-arm crops from the parts sheet.
@@ -370,7 +373,7 @@ function stage2Fire() {
     for (const pass of [s => s.open && !s.bombed, s => !(s.open && !s.bombed)]) {
       for (const s of S2.sockets) {
         if (!pass(s)) continue;
-        const p = s2Project(s.group.getWorldPosition(S2._pv));
+        const p = s2Project(s.obj.getWorldPosition(S2._pv));
         if (!p) continue;
         const dd = Math.hypot(mouseX - p.x, mouseY - p.y);
         if (dd < sBestD) { sBestD = dd; sBest = s; sBestP = p; }
@@ -426,8 +429,9 @@ function s2BuildOz() {
   S2._faceMat = new THREE.MeshBasicMaterial({ map: S2._faceTex, transparent: true });
   const face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), S2._faceMat);
   const [fx, fy] = s2SpriteLocal([(sx0 + sx1) / 2, (sy0 + sy1) / 2]);
-  face.position.set(fx, fy, 0.15);   // on the glass, behind sockets and arms
+  face.position.set(fx, fy, 0.15);   // on the glass, behind the arms
   oz.add(face);
+  S2._faceMesh = face;
 
   // Gorilla arms: shoulder-pivoted planes, animated in s2UpdateOz
   const armMat = new THREE.MeshBasicMaterial({ map: S2._ozPartsTex, transparent: true, alphaTest: 0.02 });
@@ -443,26 +447,44 @@ function s2BuildOz() {
     return { mesh, side };
   });
 
-  // Bomb sockets ride just in front of the art's own circles:
-  // both watermelon shoulder discs + the CRT screen itself
-  const mk = f => { const [x, y] = s2SpriteLocal(f); return s2BuildSocket(oz, x, y, 0.6); };
-  S2.sockets = [mk(OZ_ANCHORS.screen), mk(OZ_ANCHORS.shoulderL), mk(OZ_ANCHORS.shoulderR)];
+  // Bomb sockets — no markers, just flash state over the art's own circles
+  S2.sockets = OZ_SOCKETS.map(def => {
+    if (def.kind === 'screen') {
+      return { kind: 'screen', obj: face, mesh: null, open: false, bombed: false };
+    }
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(OZ_FLASH_SIZE, OZ_FLASH_SIZE),
+      new THREE.MeshBasicMaterial({
+        map: s2GlowTexture(), transparent: true, opacity: 0,
+        blending: THREE.AdditiveBlending, depthWrite: false,
+      })
+    );
+    const [x, y] = s2SpriteLocal(def.anchor);
+    mesh.position.set(x, y, 0.25);
+    mesh.visible = false;
+    oz.add(mesh);
+    return { kind: def.kind, obj: mesh, mesh, open: false, bombed: false };
+  });
 
   oz.position.set(0, 2, S2_SPAWN_Z);
   S2.scene.add(oz);
   S2.oz = oz;
 }
 
-function s2BuildSocket(parent, x, y, z) {
-  const group = new THREE.Group();
-  const ringMat = new THREE.MeshLambertMaterial({ color: 0x445566, emissive: 0x111111 });
-  const coreMat = new THREE.MeshLambertMaterial({ color: 0x222a33, emissive: 0x050808 });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.42, 8, 24), ringMat);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 10), coreMat);
-  group.add(ring); group.add(core);
-  group.position.set(x, y, z);
-  parent.add(group);
-  return { group, ring, core, ringMat, coreMat, open: false, bombed: false };
+// Soft radial light used for the disc vulnerability flash
+function s2GlowTexture() {
+  if (S2._glowTex) return S2._glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 6, 64, 64, 62);
+  g.addColorStop(0, 'rgba(255,255,255,1)');
+  g.addColorStop(0.55, 'rgba(255,255,255,0.35)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  S2._glowTex = new THREE.CanvasTexture(c);
+  return S2._glowTex;
 }
 
 function s2BeginApproach() {
@@ -483,8 +505,7 @@ function s2OzArrived() {
   requestAnimationFrame(() => hud.classList.add('visible'));
   S2.hudEl = hud;
 
-  s2SocketCycle();
-  s2AttackLoop();
+  s2AttackLoop();   // first window opens after the first throw
 }
 
 // === TV SCREEN — swappable face + procedural static ===
@@ -519,29 +540,27 @@ function s2TvStatic(on) {
   S2._faceMat.map = on ? s2NoiseTexture() : S2._faceTex;
 }
 
-// === SOCKET CYCLE — the timing half of the bomb mechanic ===
-function s2SocketCycle() {
+// === VULNERABILITY WINDOWS — one opens right after each throw ===
+// Dodge the fruit, then punish: the moment the orbs leave his fist, a random
+// un-bombed component starts flashing for OZ_SOCKET_OPEN_MS.
+function s2OpenSocketWindow() {
   if (S2.phase !== 'boss') return;
-  const closed = S2.sockets.filter(s => !s.bombed);
+  const closed = S2.sockets.filter(s => !s.bombed && !s.open);
   if (!closed.length) return;
   const s = closed[Math.floor(Math.random() * closed.length)];
   s2SetSocketOpen(s, true);
-  S2.socketTimer = setTimeout(() => {
-    s2SetSocketOpen(s, false);
-    S2.socketTimer = setTimeout(s2SocketCycle, OZ_SOCKET_GAP_MS);
-  }, OZ_SOCKET_OPEN_MS);
+  clearTimeout(S2.socketTimer);
+  S2.socketTimer = setTimeout(() => s2SetSocketOpen(s, false), OZ_SOCKET_OPEN_MS);
 }
 
 function s2SetSocketOpen(s, open) {
   s.open = open;
   if (open) {
-    s.ringMat.color.setHex(0x00ff88); s.ringMat.emissive.setHex(0x00cc66);
-    s.coreMat.color.setHex(0x00ff88); s.coreMat.emissive.setHex(0x00ff66);
     s2Tone(660, 0.09, 'sine', 0.1);
   } else if (!s.bombed) {
-    s.ringMat.color.setHex(0x445566); s.ringMat.emissive.setHex(0x111111);
-    s.coreMat.color.setHex(0x222a33); s.coreMat.emissive.setHex(0x050808);
-    s.group.scale.setScalar(1);
+    // reset the flash (per-frame pulse lives in s2UpdateOz)
+    if (s.kind === 'screen' && S2._faceMat) S2._faceMat.color.setRGB(1, 1, 1);
+    if (s.mesh) s.mesh.visible = false;
   }
 }
 
@@ -550,11 +569,7 @@ function s2PlantBomb(s, p) {
   s.bombed = true;
   s.open   = false;
   clearTimeout(S2.socketTimer);
-
-  // Socket becomes an armed bomb: black core, blinking red (blink in s2UpdateOz)
-  s.ringMat.color.setHex(0xff3300); s.ringMat.emissive.setHex(0x881100);
-  s.coreMat.color.setHex(0x111111); s.coreMat.emissive.setHex(0xff2200);
-  s.group.scale.setScalar(1.15);
+  // armed-bomb look: the component smolders red (per-frame in s2UpdateOz)
 
   S2.bombs++;
   explodeStars(p.x, p.y);
@@ -567,10 +582,9 @@ function s2PlantBomb(s, p) {
 
   if (S2.bombs >= OZ_BOMBS_NEEDED) { s2Detonate(); return; }
 
-  // Angrier per bomb: faster volleys, resume the cycle after a breather
+  // Angrier per bomb: faster volleys (each throw opens the next window)
   clearTimeout(S2.attackTimer);
   s2AttackLoop();
-  S2.socketTimer = setTimeout(s2SocketCycle, 900);
 }
 
 function s2Detonate() {
@@ -586,7 +600,7 @@ function s2Detonate() {
 
   setTimeout(() => {
     for (const s of S2.sockets) {
-      const p = s2Project(s.group.getWorldPosition(S2._pv));
+      const p = s2Project(s.obj.getWorldPosition(S2._pv));
       if (p) explodeStars(p.x, p.y);
     }
     [0, 220, 440].forEach(g => setTimeout(playBoom, g));
@@ -698,6 +712,7 @@ function s2ReleaseOrbs(arm) {
   }
   s2Tone(180, 0.18, 'sawtooth', 0.12);
   S2.shake = Math.max(S2.shake, 5);
+  s2OpenSocketWindow();   // he's exposed right after the throw
 }
 
 // === DAMAGE / GAME OVER ===
@@ -909,12 +924,28 @@ function s2UpdateOz() {
     }
   }
 
-  // Open sockets pulse (the "shoot me now" tell); planted bombs blink red
+  // Vulnerability flash: the component itself lights up while its window is
+  // open; a planted bomb leaves it smoldering red
   for (const s of S2.sockets) {
-    if (s.open) {
-      s.group.scale.setScalar(1 + 0.16 * Math.sin(f * 0.3));
-    } else if (s.bombed) {
-      s.coreMat.emissive.setHex(f % 30 < 15 ? 0xff2200 : 0x330500);
+    if (s.kind === 'screen') {
+      if (!S2._faceMat || S2._staticOn) continue;
+      if (s.bombed) {
+        const k = f % 30 < 15 ? 1 : 0.6;
+        S2._faceMat.color.setRGB(1, 0.45 * k, 0.4 * k);
+      } else if (s.open) {
+        const k = 0.5 + 0.5 * Math.sin(f * 0.45);
+        S2._faceMat.color.setRGB(1 - 0.55 * k, 1, 1 - 0.25 * k);
+      }
+    } else if (s.mesh) {
+      if (s.bombed) {
+        s.mesh.visible = true;
+        s.mesh.material.color.setHex(0xff2a00);
+        s.mesh.material.opacity = f % 30 < 15 ? 0.5 : 0.22;
+      } else if (s.open) {
+        s.mesh.visible = true;
+        s.mesh.material.color.setHex(0x55ffb0);
+        s.mesh.material.opacity = 0.35 + 0.45 * (0.5 + 0.5 * Math.sin(f * 0.45));
+      }
     }
   }
 }

@@ -60,17 +60,19 @@ This is the second boss and the game's current ending.
   flood-labeling the sheet; the sheet itself now contains only the nine used parts (all strays —
   bent arms, foot, treads, fruit icons, labels — are erased). If the art is regenerated, re-run
   that measurement rather than eyeballing rects.
-- **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself, each with a
-  3D ring+core marker floating just in front of the art. One at a time opens for
-  `OZ_SOCKET_OPEN_MS` (glows green, pulses), then everything closes for `OZ_SOCKET_GAP_MS` before
-  a random un-bombed socket opens next.
-  - **Timing:** a shot only plants while the socket is open.
+- **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself. There are
+  **no markers**: the component itself flashes while vulnerable — discs get a pulsing additive
+  glow, the TV face pulses green. A window opens **the moment a throw's orbs leave his fist**
+  (dodge the fruit, then punish) and lasts `OZ_SOCKET_OPEN_MS`; one random un-bombed component
+  per throw.
+  - **Timing:** a shot only plants while the component is flashing.
   - **Accuracy:** the shot must land within `OZ_SOCKET_HIT_PX` (72px) of the socket's projected
     center — tighter than the gallery's 110px assist.
-  - A shot on a **closed** socket clanks and sparks; it teaches the rule without punishing.
-- A planted bomb turns the socket into a blinking red charge, fills a HUD slot, flashes green, and
-  makes Ozamatron angrier: volley interval multiplies by **0.78 per bomb** and each volley gains
-  an orb (1 → 2 → 3).
+  - A shot on a **dark** (closed) component clanks and sparks; it teaches the rule without
+    punishing.
+- A planted bomb leaves the component **smoldering red** (dim blinking glow; the screen's face
+  tints red), fills a HUD slot, flashes green, and makes Ozamatron angrier: volley interval
+  multiplies by **0.78 per bomb** and each volley gains an orb (1 → 2 → 3).
 - **Attacks are thrown, ape-style.** The attack timer starts a throw cycle (`OZ_THROW`): the arm
   winds up overhead over 26 frames — **the wind-up is the telegraph** — quivers for 8, then snaps
   down in 6, releasing orbs **from the fist** mid-snap while the body lunges forward. Arms
@@ -113,8 +115,8 @@ All in the config block at the top of `stage2.js`.
 | `S2_SHIP_AIM_DROP` | 3.5 u | Ship offset below the crosshair, so it can't block the shot. |
 | `S2_ASTEROID_MS` | 1800 / 2600 mobile | Hazard cadence. |
 | `OZ_BOMBS_NEEDED` | 3 | Bombs to win. |
-| `OZ_SOCKET_OPEN_MS` | 1500 / 1900 mobile | The timing window. Mobile gets longer because fingers. |
-| `OZ_SOCKET_GAP_MS` | 1100 | All-closed pause between windows. |
+| `OZ_SOCKET_OPEN_MS` | 1500 / 1900 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
+| `OZ_FLASH_SIZE` | 11 u | Disc glow plane size. |
 | `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
 | `OZ_ATTACK_MS` | 3400 × 0.78^bombs | Volley cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
