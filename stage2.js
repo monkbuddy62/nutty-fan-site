@@ -249,6 +249,7 @@ function s2ReturnToGallery() {
   }
 
   for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
+  if (window.startGalleryTheme) startGalleryTheme();
 }
 
 // Clears entities + timers + hides the 3D layer. Scene/renderer survive for retries.

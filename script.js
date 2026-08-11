@@ -177,6 +177,45 @@ function playNuttyClip() {
   currentClip = a;
 }
 
+// === GALLERY THEME — plays whenever the gallery itself is on screen:
+// game start, the post-Jake intermission, and the post-stage-2 return.
+// Pauses (keeping its place) for boss fights and stage 2.
+let galleryTheme        = null;
+let galleryThemePending = false;
+
+function galleryActive() {
+  return !boss.active && !(window.STAGE2 && STAGE2.active) && !document.getElementById('gameOverScreen');
+}
+
+function startGalleryTheme() {
+  if (!galleryTheme) {
+    galleryTheme = new Audio(AUDIO_DIR + 'gallery-theme.mp3');
+    galleryTheme.loop = true;
+    galleryTheme.volume = 0.45;
+  }
+  if (muted) return;
+  galleryTheme.play().then(() => { galleryThemePending = false; }).catch(() => {
+    // Autoplay is blocked until the first tap — start it on that tap instead
+    if (galleryThemePending) return;
+    galleryThemePending = true;
+    const kick = () => {
+      document.removeEventListener('mousedown', kick);
+      document.removeEventListener('touchstart', kick);
+      if (galleryThemePending && galleryActive() && !muted) {
+        galleryThemePending = false;
+        galleryTheme.play().catch(() => {});
+      }
+    };
+    document.addEventListener('mousedown', kick);
+    document.addEventListener('touchstart', kick);
+  });
+}
+
+function stopGalleryTheme() {
+  galleryThemePending = false;
+  if (galleryTheme) galleryTheme.pause();   // no rewind — it resumes where it left off
+}
+
 muteBtn.addEventListener('click', () => {
   muted = !muted;
   muteBtn.textContent = muted ? '🔇' : '🔊';
@@ -188,6 +227,10 @@ muteBtn.addEventListener('click', () => {
     else if (boss.active) bossTheme.play().catch(() => {});
   }
   if (window.s2ThemeMute) s2ThemeMute();
+  if (galleryTheme) {
+    if (muted) galleryTheme.pause();
+    else if (galleryActive()) galleryTheme.play().catch(() => {});
+  }
 });
 
 // === EXPLOSION STYLES ===
@@ -642,6 +685,7 @@ fetch('media/manifest.json')
 
     for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     setTimeout(showShootHint, 1200);
+    startGalleryTheme();
   })
   .catch(() => {
     loadingText.textContent = 'Add files to media/ and run build-manifest.py';
@@ -955,6 +999,7 @@ function startBoss() {
 
   buildBossDOM();
   setBossState('idle');
+  stopGalleryTheme();
   startBossTheme();
 
   // Slide in from top
@@ -1090,6 +1135,7 @@ function restartGame() {
   }
 
   for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
+  startGalleryTheme();
 }
 
 function damageBoss(amount = 1) {
@@ -1120,6 +1166,7 @@ function defeatBoss() {
   boss.active = false;
   jakeDefeated = true;
   stopBossTheme();
+  startGalleryTheme();   // intermission music — same track, same spot
   preloadStage2();   // ~600KB of three.min.js arrives during the interlude kills
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
@@ -1164,6 +1211,7 @@ function preloadStage2() {
 }
 
 function enterStage2() {
+  stopGalleryTheme();
   // Wind the gallery down the same way startBoss does
   targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
   setTimeout(() => {

@@ -21,9 +21,10 @@ cleared after 1 second, `spawnTarget()` becomes a no-op for the duration, and th
 ## Theme music
 
 **`boss/jake-theme.mp3`** loops at volume 0.55 for the duration of this fight only. It starts in
-`startBoss()`, stops (and rewinds) on both exits — `defeatBoss()` and `endBoss()` — and restarts
-from the top on a rematch. The mute button pauses/resumes it in place rather than restarting.
-Neither the gallery nor stage 2 has music; this is deliberate — Jake gets an entrance.
+`startBoss()` (which also pauses the gallery theme), stops (and rewinds) on both exits —
+`defeatBoss()` and `endBoss()` — and restarts from the top on a rematch. On victory the gallery
+theme resumes where it left off for the intermission. The mute button pauses/resumes it in place
+rather than restarting. See [audio.md](audio.md) for the full music map.
 
 ## Phases
 

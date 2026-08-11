@@ -2,11 +2,28 @@
 
 ## What it is
 
-Three sounds. Two are synthesised in the browser with WebAudio and need no files; the third is a
-pool of recorded Nutty voice clips, one played at random on every kill. The clips are the point of
-the site — the shooting is the delivery mechanism for them.
+Three sound effects plus theme music. Two SFX are synthesised in the browser with WebAudio and
+need no files; the third is a pool of recorded Nutty voice clips, one played at random on every
+kill. The clips are the point of the site — the shooting is the delivery mechanism for them.
+Three looping music tracks cover the gallery and the two boss fights.
 
 > **The clip files are not in this repo.** See *Known gap* below before touching anything here.
+
+## Theme music
+
+Three `Audio`-element loops, each owned by its phase, never overlapping:
+
+| Track | Plays | Volume | Owned by |
+|---|---|---|---|
+| `audio/gallery-theme.mp3` | Game start, the post-Jake intermission, the post-stage-2 gallery | 0.45 | `startGalleryTheme()` / `stopGalleryTheme()` (`script.js`) |
+| `boss/jake-theme.mp3` | The Jake fight only | 0.55 | [boss-fight.md](boss-fight.md) |
+| `boss/ozamatron-theme.mp3` | Ozamatron approach → third bomb or death | 0.55 | [stage2-ozamatron.md](stage2-ozamatron.md) |
+
+The gallery theme **pauses without rewinding** — after Jake it resumes where it left off. The boss
+themes restart from the top each encounter. The gallery theme's initial `play()` at page load is
+usually blocked by autoplay policy; a one-shot `mousedown`/`touchstart` fallback starts it on the
+first tap. The mute button pauses/resumes all three in place. The stage-2 flight phase is
+deliberately music-free.
 
 ## Synthesised SFX
 
@@ -59,9 +76,10 @@ firing.
 
 ## Known gap — the clips are missing
 
-`AUDIO_DIR` and all 20 filenames are referenced by `script.js`, but **there is no `audio/`
-directory in this repo, and none in the git history.** As committed, every clip request 404s and
-`playNuttyClip()` silently swallows it. The game plays with pew and boom only.
+All 20 clip filenames are referenced by `script.js`, but **none of the `.wav` files are in this
+repo, and none are in the git history.** (`audio/` itself now exists — it holds only
+`gallery-theme.mp3`.) As committed, every clip request 404s and `playNuttyClip()` silently
+swallows it. The game plays with pew, boom, and the themes only.
 
 Two possibilities, and it isn't recorded which:
 
