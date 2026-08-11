@@ -5,19 +5,20 @@
 Three sound effects plus theme music. Two SFX are synthesised in the browser with WebAudio and
 need no files; the third is a pool of recorded Nutty voice clips, one played at random on every
 kill. The clips are the point of the site — the shooting is the delivery mechanism for them.
-Three looping music tracks cover the gallery and the two boss fights.
+Four looping music tracks cover the gallery, the two boss fights, and the stage-3 dance-off.
 
 > **The clip files are not in this repo.** See *Known gap* below before touching anything here.
 
 ## Theme music
 
-Three `Audio`-element loops, each owned by its phase, never overlapping:
+Four `Audio`-element loops, each owned by its phase, never overlapping:
 
 | Track | Plays | Volume | Owned by |
 |---|---|---|---|
 | `audio/gallery-theme.mp3` | Game start, after a Jake loss + retry, the post-stage-2 gallery | 0.45 | `startGalleryTheme()` / `stopGalleryTheme()` (`script.js`) |
 | `boss/jake-theme.mp3` | The Jake fight only | 0.55 | [boss-fight.md](boss-fight.md) |
 | `boss/ozamatron-theme.mp3` | Ozamatron approach → third bomb or death | 0.55 | [stage2-ozamatron.md](stage2-ozamatron.md) |
+| `audio/pnutsuxnuts_mixdown.mp3` | Stage 3 dance-off onward — **forever**: it keeps looping through the victory screen and the post-game gallery | 0.7 | [stage3-dance.md](stage3-dance.md) |
 
 Jake also has five **voice lines** (entrance, two hit grunts, phase-2, defeat) — see
 [boss-fight.md](boss-fight.md).
@@ -26,8 +27,11 @@ The gallery theme **pauses without rewinding** — after Jake it resumes where i
 themes restart from the top each encounter. Any theme's `play()` can be rejected by autoplay
 policy when no trusted gesture has happened yet (page load; the `?fight=` debug warps) — every
 start goes through `playWithGestureFallback()`, which retries on the next `mousedown`/`touchstart`
-if that theme's phase is still active by then. The mute button pauses/resumes all three in place. The stage-2 flight phase is
-deliberately music-free.
+if that theme's phase is still active by then. The mute button pauses/resumes all four in place
+(`s3ThemeMute` for the mixdown — note that pausing the mixdown freezes the dance-off itself,
+since its chart runs on `audio.currentTime`). The stage-2 flight phase is deliberately
+music-free. After the dance-off is won, `galleryActive()` reports false forever
+(`STAGE3.done`), so the gallery theme never resumes — the mixdown is the trophy.
 
 ## Synthesised SFX
 
@@ -82,7 +86,7 @@ firing.
 
 All 20 clip filenames are referenced by `script.js`, but **none of the `.wav` files are in this
 repo, and none are in the git history.** (`audio/` itself now exists — it holds only
-`gallery-theme.mp3`.) As committed, every clip request 404s and `playNuttyClip()` silently
+`gallery-theme.mp3` and `pnutsuxnuts_mixdown.mp3`.) As committed, every clip request 404s and `playNuttyClip()` silently
 swallows it. The game plays with pew, boom, and the themes only.
 
 Two possibilities, and it isn't recorded which:

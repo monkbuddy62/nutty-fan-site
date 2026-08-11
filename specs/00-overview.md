@@ -15,11 +15,12 @@
 | `index.html` | Game shell — canvases, HUD markup, overlays. ~64 lines. |
 | `script.js` | The gallery + Jake + stage-2 bridge. Vanilla ES6, no modules. |
 | `stage2.js` | Stage 2: the 3D on-rails flight and Ozamatron. Same conventions. |
+| `stage3.js` | Stage 3: the Patticus Maximus dance-off — the game's ending. Same conventions. |
 | `libs/` | Vendored `three.min.js` (r140 UMD), lazy-loaded for stage 2 only. |
 | `style.css` | All game styling, including the CRT scanline/vignette treatment. |
 | `media/` | Photo and video targets, plus the committed `manifest.json` index. |
 | `boss/` | Jake's four sprites + Ozamatron's billboard, parts-sheet, and TV-face textures. |
-| `audio/` | Referenced by the game but **not present in the repo** — see `audio.md`. |
+| `audio/` | Theme music (gallery theme, the stage-3 mixdown). The 20 voice clips are **not in the repo** — see `audio.md`. |
 | `dnd-map/` | Vendored upstream code. Do not hand-edit; see `dnd-map.md`. |
 | `build-manifest.py`, `convert-heic.sh` | The media ingestion scripts. |
 
@@ -30,6 +31,7 @@
 | [shooting-gallery.md](shooting-gallery.md) | The core loop: spawning, motion, fleeing, shooting, streaks, idle mode |
 | [boss-fight.md](boss-fight.md) | The Jake the Snake encounter, its two phases, player lives, game over |
 | [stage2-ozamatron.md](stage2-ozamatron.md) | Stage 2: the 3D on-rails flight and the Ozamatron bomb fight |
+| [stage3-dance.md](stage3-dance.md) | Stage 3: the DDR-style dance-off against Patticus Maximus |
 | [hud-and-crosshair.md](hud-and-crosshair.md) | The canvas overlay, crosshair, lock-on brackets, HUD readouts |
 | [visual-effects.md](visual-effects.md) | Explosion styles, warp starfield, screen flashes |
 | [audio.md](audio.md) | Synthesised SFX and the Nutty voice-clip pool |

@@ -203,7 +203,11 @@ function playWithGestureFallback(audio, stillWanted) {
 let galleryTheme = null;
 
 function galleryActive() {
-  return !boss.active && !(window.STAGE2 && STAGE2.active) && !document.getElementById('gameOverScreen');
+  // Once the dance-off has been won (STAGE3.done), the mixdown owns the audio
+  // for the rest of the session — the gallery theme never comes back.
+  return !boss.active && !(window.STAGE2 && STAGE2.active)
+      && !(window.STAGE3 && (STAGE3.active || STAGE3.done))
+      && !document.getElementById('gameOverScreen');
 }
 
 function startGalleryTheme() {
@@ -232,6 +236,7 @@ muteBtn.addEventListener('click', () => {
     else if (boss.active) bossTheme.play().catch(() => {});
   }
   if (window.s2ThemeMute) s2ThemeMute();
+  if (window.s3ThemeMute) s3ThemeMute();
   if (galleryTheme) {
     if (muted) galleryTheme.pause();
     else if (galleryActive()) galleryTheme.play().catch(() => {});
@@ -732,6 +737,7 @@ function fireShot() {
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
+  if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
   touchInteraction();
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
@@ -747,6 +753,7 @@ window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; })
 document.addEventListener('touchstart', e => {
   if (e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
+  if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
   e.preventDefault();
   touchInteraction();
   const t = e.touches[0];
@@ -783,8 +790,13 @@ fetch('media/manifest.json')
     initStars();
     requestAnimationFrame(loop);
 
-    // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the boss
+    // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the
+    // boss, ?fight=dance straight to the Patticus Maximus dance-off
     const fight = new URLSearchParams(location.search).get('fight');
+    if (fight === 'dance' && window.startStage3) {
+      startStage3();
+      return;
+    }
     if ((fight === 'stage2' || fight === 'ozamatron') && window.STAGE2) {
       STAGE2.skipToBoss = fight === 'ozamatron';
       enterStage2();
@@ -806,7 +818,7 @@ fetch('media/manifest.json')
 
 // === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
-  if (boss.active || (window.STAGE2 && STAGE2.active)) return;
+  if (boss.active || (window.STAGE2 && STAGE2.active) || (window.STAGE3 && STAGE3.active)) return;
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
   const active = new Set(targets.map(t => t.file));
@@ -973,6 +985,15 @@ function shootTarget(target) {
 // === GAME LOOP ===
 function loop() {
   frameCount++;
+
+  // Stage 3 (the dance-off) is pure DOM — the warp starfield keeps running
+  // behind the dance floor, but shooting and the crosshair are done.
+  if (window.STAGE3 && STAGE3.active) {
+    drawWarp();
+    stage3Tick();
+    requestAnimationFrame(loop);
+    return;
+  }
 
   // Stage 2 owns the frame: the 3D scene renders instead of warp + targets.
   // The crosshair overlay stays — same reticle in both worlds.

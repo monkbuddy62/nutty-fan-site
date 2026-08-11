@@ -613,7 +613,7 @@ body::after {
 
 .disco-ball {
   position: absolute;
-  top: 52px;
+  top: 4px;            /* the hud-top center band is empty — hang it above the nameplate */
   left: 50%;
   font-size: 44px;
   transform-origin: 50% -30px;
