@@ -333,6 +333,8 @@ body::after {
   transition: opacity 0.5s;
 }
 #boss-hud.visible { opacity: 1; }
+/* Ozamatron reuses the plate but is much taller — sit above his face */
+#boss-hud.oz { top: 84px; }
 
 #boss-hud-name {
   font-size: 0.65rem;
@@ -574,4 +576,440 @@ body::after {
   .hud-val { font-size: 0.9rem; }
   .hud-cell { padding: 0.45rem 0.9rem; }
   .streak-popup { font-size: 1.5rem; }
+}
+
+/* === STAGE 3 — DANCE-OFF (PATTICUS MAXIMUS) === */
+/* Sits below the HUD (z 100) so the mute button stays reachable. */
+#danceStage {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  animation: dance-in 0.9s ease-out;
+}
+@keyframes dance-in { from { opacity: 0; } }
+
+.dance-floor {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 50% 18%, rgba(255, 0, 200, 0.10), transparent 55%),
+    radial-gradient(ellipse at 50% 115%, rgba(0, 255, 200, 0.16), transparent 60%),
+    linear-gradient(180deg, rgba(6, 0, 14, 0.90), rgba(12, 0, 28, 0.94));
+}
+/* Two color washes pulsing on the beat grid — opacity-only, compositor cheap */
+.dance-wash { position: absolute; inset: -10%; pointer-events: none; }
+.dance-w1 {
+  background: radial-gradient(circle at 28% 32%, rgba(255, 34, 153, 0.16), transparent 45%);
+  animation: wash-pulse calc(var(--beat, 0.46s) * 4) ease-in-out infinite;
+}
+.dance-w2 {
+  background: radial-gradient(circle at 72% 38%, rgba(136, 68, 255, 0.18), transparent 45%);
+  animation: wash-pulse calc(var(--beat, 0.46s) * 4) ease-in-out infinite;
+  animation-delay: calc(var(--beat, 0.46s) * 2);
+}
+@keyframes wash-pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+
+.disco-ball {
+  position: absolute;
+  top: 52px;
+  left: 50%;
+  font-size: 44px;
+  transform-origin: 50% -30px;
+  animation: ball-swing calc(var(--beat, 0.46s) * 8) ease-in-out infinite;
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.55));
+}
+@keyframes ball-swing {
+  0%, 100% { transform: translateX(-50%) rotate(-9deg); }
+  50%      { transform: translateX(-50%) rotate(9deg); }
+}
+
+.dance-spot {
+  position: absolute;
+  left: 50%;
+  top: 10vh;
+  width: 360px;
+  height: 360px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.10), transparent 60%);
+  pointer-events: none;
+}
+
+/* --- Nameplate + crowd-hype meter --- */
+#dance-hud {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: min(440px, 94vw);
+}
+.dance-name {
+  font-size: 20px;
+  font-weight: bold;
+  letter-spacing: 5px;
+  color: #ffd54a;
+  text-shadow: 0 0 14px rgba(255, 213, 74, 0.8), 0 0 40px rgba(255, 120, 0, 0.4);
+}
+.dance-sub {
+  margin-top: 2px;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.dance-meter-lbl {
+  margin-top: 7px;
+  font-size: 8px;
+  letter-spacing: 3px;
+  color: rgba(34, 255, 204, 0.75);
+}
+.dance-meter {
+  margin: 3px auto 0;
+  width: 240px;
+  height: 8px;
+  border: 1px solid rgba(255, 213, 74, 0.5);
+  background: rgba(0, 0, 0, 0.45);
+}
+#grooveFill {
+  height: 100%;
+  background: linear-gradient(90deg, #22ffcc, #ffd54a);
+  transform-origin: left center;
+  transform: scaleX(0.5);
+  transition: transform 0.18s ease-out;
+}
+
+/* --- Patticus Maximus: laurel, shades, toga, cape — pure CSS gladiator --- */
+#patticus {
+  position: absolute;
+  left: 50%;
+  top: 14vh;
+  width: 130px;
+  height: 240px;
+  margin-left: -65px;
+  pointer-events: none;
+}
+.px-bob {
+  position: absolute;
+  inset: 0;
+  animation: px-bob var(--beat, 0.46s) ease-in-out infinite;
+}
+@keyframes px-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(7px); } }
+.px-fig { position: absolute; inset: 0; transition: transform 0.12s ease-out; }
+
+.px-head {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 46px;
+  height: 46px;
+  margin-left: -23px;
+  border-radius: 50%;
+  background: #e6b98e;
+  z-index: 3;
+}
+.px-laurel {
+  position: absolute;
+  left: -5px;
+  right: -5px;
+  top: -6px;
+  height: 24px;
+  border: 5px solid #ffd54a;
+  border-bottom: none;
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 0 10px rgba(255, 213, 74, 0.8);
+}
+.px-shades {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 17px;
+  height: 10px;
+  background: #101014;
+  border-radius: 3px;
+  box-shadow: inset 0 2px rgba(255, 255, 255, 0.3);
+  transition: transform 0.4s;
+}
+.px-cape {
+  position: absolute;
+  left: 50%;
+  top: 46px;
+  width: 86px;
+  height: 100px;
+  margin-left: -43px;
+  background: linear-gradient(180deg, #cc2233, #77000f);
+  border-radius: 8px 8px 42% 42%;
+  transform-origin: 50% 4px;
+  animation: cape-sway calc(var(--beat, 0.46s) * 2) ease-in-out infinite;
+  z-index: 0;
+}
+@keyframes cape-sway { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+.px-torso {
+  position: absolute;
+  left: 50%;
+  top: 44px;
+  width: 64px;
+  height: 72px;
+  margin-left: -32px;
+  background: linear-gradient(105deg, #f4f0e4 58%, #ded7c0 58%);
+  border-radius: 14px 14px 8px 8px;
+  border-bottom: 6px solid #c9a13c;
+  z-index: 2;
+}
+.px-torso::before {         /* gold toga sash, shoulder to hip */
+  content: '';
+  position: absolute;
+  left: -4px;
+  top: 8px;
+  width: 76px;
+  height: 12px;
+  background: linear-gradient(90deg, #ffd54a, #c9a13c);
+  transform: rotate(24deg);
+  border-radius: 6px;
+}
+.px-skirt {
+  position: absolute;
+  left: 50%;
+  top: 114px;
+  width: 70px;
+  height: 32px;
+  margin-left: -35px;
+  background: repeating-linear-gradient(90deg, #b3873a 0 10px, #8a6527 10px 14px);
+  border-radius: 0 0 10px 10px;
+  z-index: 2;
+}
+.px-arm {
+  position: absolute;
+  top: 48px;
+  width: 14px;
+  height: 66px;
+  background: linear-gradient(#e6b98e, #d9a877);
+  border-radius: 7px;
+  transform-origin: 50% 7px;
+  transition: transform 0.09s ease-out;
+  z-index: 1;
+}
+.px-arm::after {            /* fist */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -6px;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  border-radius: 50%;
+  background: #e6b98e;
+  box-shadow: 0 -14px 0 -5px #ffd54a;   /* gold wristband */
+}
+.px-armL { left: 14px; transform: rotate(14deg); }
+.px-armR { right: 14px; transform: rotate(-14deg); }
+.px-leg {
+  position: absolute;
+  top: 142px;
+  width: 16px;
+  height: 70px;
+  background: linear-gradient(#e6b98e, #d9a877);
+  border-radius: 8px 8px 4px 4px;
+  transform-origin: 50% 8px;
+  transition: transform 0.09s ease-out;
+  z-index: 1;
+}
+.px-leg::after {            /* sandal */
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 24px;
+  height: 10px;
+  margin-left: -12px;
+  border-radius: 4px;
+  background: #8a5a2b;
+}
+.px-legL { left: 42px; }
+.px-legR { right: 42px; }
+
+/* Poses — one per lane; he strikes the move as its arrow hits the receptors */
+#patticus.pose-l .px-armL { transform: rotate(96deg); }
+#patticus.pose-l .px-armR { transform: rotate(-30deg); }
+#patticus.pose-l .px-legL { transform: rotate(20deg); }
+#patticus.pose-l .px-fig  { transform: rotate(-7deg) translateX(-8px); }
+#patticus.pose-r .px-armR { transform: rotate(-96deg); }
+#patticus.pose-r .px-armL { transform: rotate(30deg); }
+#patticus.pose-r .px-legR { transform: rotate(-20deg); }
+#patticus.pose-r .px-fig  { transform: rotate(7deg) translateX(8px); }
+#patticus.pose-u .px-armL { transform: rotate(162deg); }
+#patticus.pose-u .px-armR { transform: rotate(-162deg); }
+#patticus.pose-u .px-fig  { transform: translateY(-13px); }
+#patticus.pose-d .px-armL { transform: rotate(36deg); }
+#patticus.pose-d .px-armR { transform: rotate(-36deg); }
+#patticus.pose-d .px-legL { transform: rotate(14deg); }
+#patticus.pose-d .px-legR { transform: rotate(-14deg); }
+#patticus.pose-d .px-fig  { transform: translateY(12px); }
+
+/* Defeat — the champion crumples, shades knocked askew */
+#patticus.defeated .px-bob,
+#patticus.defeated .px-cape { animation: none; }
+#patticus.defeated .px-fig {
+  transform: rotate(84deg) translate(30px, 86px);
+  transition: transform 1s cubic-bezier(0.4, 1.5, 0.6, 1);
+}
+#patticus.defeated .px-shades { transform: rotate(20deg) translateY(5px); }
+
+.px-say {
+  position: absolute;
+  bottom: calc(100% + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: 250px;
+  padding: 7px 11px;
+  background: rgba(245, 240, 228, 0.95);
+  color: #1a0a20;
+  font-size: 11px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  text-align: center;
+  border-radius: 8px;
+  opacity: 0;
+  transition: opacity 0.25s;
+  pointer-events: none;
+}
+.px-say::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -6px;
+  border: 6px solid transparent;
+  border-top-color: rgba(245, 240, 228, 0.95);
+}
+.px-say.visible { opacity: 1; }
+
+/* --- The 4-lane track --- */
+#dance-track {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%);
+  width: min(440px, 96vw);
+  height: 46vh;
+  min-height: 240px;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(90deg,
+      transparent 0, transparent calc(25% - 1px),
+      rgba(255, 255, 255, 0.07) calc(25% - 1px), rgba(255, 255, 255, 0.07) 25%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.45), rgba(0, 0, 0, 0.12) 130px, rgba(0, 0, 0, 0) 60%);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.d-receptor, .d-arrow {
+  position: absolute;
+  top: 14px;
+  width: 25%;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 42px;
+  line-height: 1;
+  pointer-events: none;
+}
+.d-receptor span, .d-arrow span { display: block; }
+.d-receptor { color: rgba(255, 255, 255, 0.20); }
+.d-receptor.flash { animation: recep-flash 0.18s ease-out; }
+@keyframes recep-flash {
+  0%   { color: #ffffff; transform: scale(1.35); }
+  100% { color: rgba(255, 255, 255, 0.20); transform: scale(1); }
+}
+.d-arrow { transition: opacity 0.24s; will-change: transform; }
+.d-lane-0 { color: #ff2299; text-shadow: 0 0 12px #ff2299; }
+.d-lane-1 { color: #22ffcc; text-shadow: 0 0 12px #22ffcc; }
+.d-lane-2 { color: #ffaa22; text-shadow: 0 0 12px #ffaa22; }
+.d-lane-3 { color: #8844ff; text-shadow: 0 0 14px #aa77ff; }
+.d-arrow.hit    { opacity: 0; filter: brightness(2.5); }
+.d-arrow.missed { opacity: 0; filter: grayscale(1); transition: opacity 0.38s; }
+
+.lane-btn {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 25%;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.lane-btn:active { background: rgba(255, 255, 255, 0.06); }
+
+#dance-judge {
+  position: absolute;
+  top: 84px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  opacity: 0;
+  pointer-events: none;
+}
+#dance-judge.j-perfect { color: #22ffcc; text-shadow: 0 0 14px #22ffcc; }
+#dance-judge.j-good    { color: #ffd54a; text-shadow: 0 0 14px #ffd54a; }
+#dance-judge.j-miss    { color: #ff3355; text-shadow: 0 0 14px #ff3355; }
+#dance-judge.pop { animation: judge-pop 0.5s ease-out forwards; }
+@keyframes judge-pop {
+  0%   { opacity: 1; transform: scale(1.45); }
+  70%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+#dance-combo {
+  position: absolute;
+  left: 50%;
+  bottom: calc(46vh + 12px);
+  transform: translateX(-50%);
+  font-family: 'Courier New', monospace;
+  font-size: 26px;
+  font-weight: bold;
+  letter-spacing: 3px;
+  color: #22ffcc;
+  text-shadow: 0 0 16px rgba(34, 255, 204, 0.8);
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+#dance-combo.visible { opacity: 1; }
+
+.dance-hint {
+  position: absolute;
+  top: 152px;
+  left: 6%;
+  right: 6%;
+  text-align: center;
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.8);
+  text-shadow: 0 0 8px #000;
+  opacity: 0;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+.dance-hint.visible { opacity: 1; }
+
+.dance-stats {
+  font-family: 'Courier New', monospace;
+  font-size: 13px;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.85);
+  margin: 14px 0 4px;
+}
+.dance-stats.dance-outro { color: rgba(0, 255, 200, 0.6); margin-bottom: 20px; }
+
+@media (max-height: 640px) {
+  #patticus { transform: scale(0.7); transform-origin: top center; top: 11vh; }
+  .disco-ball { font-size: 32px; }
+  #dance-hud { top: 46px; }
 }

@@ -33,8 +33,13 @@ const OZ_MISSILE_TURN    = 0.05;                  // steering lerp per frame
 const S2_PARTICLES       = IS_MOBILE ? 70 : 130;  // particle pool (trails, sparks, bursts)
 const OZ_HOLD_Z          = -70;                   // where Ozamatron parks — close and huge
 const OZ_APPROACH_FR     = 420;                   // frames of approach glide (~7s)
-const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, arms erased
-const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet (arms + debris)
+const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard, arms+legs erased
+const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet (limbs + debris)
+const OZ_PARTS_LIGHT     = 'boss/ozamatron-parts-light.png';  // scratched/dented variants
+const OZ_PARTS_HEAVY     = 'boss/ozamatron-parts-heavy.png';  // rusted/smashed variants
+const OZ_CHIP_HITS       = 6;    // hits to lightly damage a core component (any time)
+const OZ_COSM_LIGHT      = 5;    // cosmetic part hits → light damage
+const OZ_COSM_HEAVY      = 12;   //  … → heavy damage (visual only)
 const OZ_SIZE            = 55;                    // sprite plane size in world units (square)
 // Bomb sockets: the CRT screen + both watermelon shoulder discs. There are
 // no 3D markers — the component itself flashes while its window is open
@@ -73,16 +78,42 @@ const OZ_THROW = {
 // Detonation debris cut from the parts sheet: uv rect (x→right, y→down),
 // anchor = where the part sits on the standing sprite, size in world units.
 const OZ_PARTS = [
-  { rect: [0.385, 0.062, 0.615, 0.282], anchor: [0.495, 0.270], size: [18.3, 17.4] }, // TV head
-  { rect: [0.625, 0.036, 0.759, 0.125], anchor: [0.500, 0.075], size: [6.3, 4.2] },   // antenna cap
-  { rect: [0.042, 0.081, 0.211, 0.252], anchor: [0.200, 0.335], size: [10.3, 10.4] }, // disc L
-  { rect: [0.789, 0.081, 0.957, 0.252], anchor: [0.800, 0.335], size: [10.2, 10.4] }, // disc R
-  { rect: [0.029, 0.339, 0.161, 0.608], anchor: [0.115, 0.620], size: [12.0, 24.5] }, // arm L
-  { rect: [0.838, 0.330, 0.970, 0.608], anchor: [0.885, 0.620], size: [11.6, 24.5] }, // arm R
-  { rect: [0.388, 0.301, 0.612, 0.500], anchor: [0.500, 0.500], size: [11.7, 10.4] }, // torso core
-  { rect: [0.208, 0.486, 0.475, 0.999], anchor: [0.400, 0.730], size: [14.9, 28.7] }, // leg L
-  { rect: [0.527, 0.486, 0.794, 0.999], anchor: [0.600, 0.730], size: [14.9, 28.7] }, // leg R
+  { name: 'head',    rect: [0.385, 0.062, 0.615, 0.282], anchor: [0.495, 0.270], size: [18.3, 17.4] },
+  { name: 'antenna', rect: [0.625, 0.036, 0.759, 0.125], anchor: [0.500, 0.075], size: [6.3, 4.2] },
+  { name: 'discL',   rect: [0.042, 0.081, 0.211, 0.252], anchor: [0.200, 0.335], size: [10.3, 10.4] },
+  { name: 'discR',   rect: [0.789, 0.081, 0.957, 0.252], anchor: [0.800, 0.335], size: [10.2, 10.4] },
+  { name: 'armL',    rect: [0.029, 0.339, 0.161, 0.608], anchor: [0.115, 0.620], size: [12.0, 24.5] },
+  { name: 'armR',    rect: [0.838, 0.330, 0.970, 0.608], anchor: [0.885, 0.620], size: [11.6, 24.5] },
+  { name: 'torso',   rect: [0.388, 0.301, 0.612, 0.500], anchor: [0.500, 0.500], size: [11.7, 10.4] },
+  { name: 'legL',    rect: [0.208, 0.486, 0.475, 0.999], anchor: [0.400, 0.730], size: [14.9, 28.7] },
+  { name: 'legR',    rect: [0.527, 0.486, 0.794, 0.999], anchor: [0.600, 0.730], size: [14.9, 28.7] },
 ];
+// The damage sheets have slightly different layouts — rects auto-measured per sheet
+const OZ_DMG_RECTS = {
+  light: {
+    head: [0.386, 0.064, 0.614, 0.281], antenna: [0.626, 0.038, 0.757, 0.124],
+    discL: [0.043, 0.082, 0.210, 0.251], discR: [0.790, 0.082, 0.957, 0.250],
+    armL: [0.031, 0.340, 0.161, 0.613], armR: [0.839, 0.340, 0.969, 0.615],
+    torso: [0.389, 0.302, 0.611, 0.499],
+    legL: [0.209, 0.487, 0.474, 1.000], legR: [0.529, 0.488, 0.793, 1.000],
+  },
+  heavy: {
+    head: [0.386, 0.064, 0.614, 0.281], antenna: [0.626, 0.038, 0.759, 0.124],
+    discL: [0.043, 0.082, 0.210, 0.251], discR: [0.790, 0.082, 0.957, 0.251],
+    armL: [0.031, 0.340, 0.161, 0.613], armR: [0.839, 0.340, 0.969, 0.615],
+    torso: [0.389, 0.302, 0.611, 0.499],
+    legL: [0.208, 0.488, 0.474, 1.000], legR: [0.529, 0.488, 0.786, 1.000],
+  },
+};
+// Marching legs: separate planes behind the body (the baked legs are erased),
+// pivoted at the hips — they shift weight, swing, and can show damage
+const OZ_LEG = {
+  rectL: [0.208, 0.486, 0.475, 0.999],
+  rectR: [0.527, 0.486, 0.794, 0.999],
+  size: [14.9, 28.7],
+  pivotL: [0.400, 0.495], pivotR: [0.600, 0.495],
+  pivotDown: 2.2,
+};
 // The TV screen: a swappable overlay plane sitting on the CRT glass.
 // Default face is boss/ozamatron-face.png; s2SetTvImage(url) swaps it, and
 // the screen cuts to static while he chest-beats.
@@ -139,6 +170,8 @@ function s2InitScene() {
   S2._ozTex      = new THREE.TextureLoader().load(OZ_SPRITE);
   S2._ozPartsTex = new THREE.TextureLoader().load(OZ_PARTS_SPRITE);
   S2._faceTex    = new THREE.TextureLoader().load(OZ_FACE_SPRITE);
+  S2._lightTex   = new THREE.TextureLoader().load(OZ_PARTS_LIGHT);
+  S2._heavyTex   = new THREE.TextureLoader().load(OZ_PARTS_HEAVY);
 
   s2BuildStars();
   s2BuildShip();
@@ -308,8 +341,13 @@ function s2ReturnToGallery() {
   s2Teardown();
   S2.done  = true;
   S2.phase = 'idle';
+  s2RestoreWpnsCell();
+  for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
+  if (window.startGalleryTheme) startGalleryTheme();
+}
 
-  // Restore the LIVES cell to WPNS / ARMED, same as restartGame()
+// Restore the LIVES cell to WPNS / ARMED, same as restartGame()
+function s2RestoreWpnsCell() {
   const livesVal = document.getElementById('lives-val');
   if (livesVal) {
     livesVal.textContent = 'ARMED';
@@ -318,9 +356,6 @@ function s2ReturnToGallery() {
     const lbl = livesVal.previousElementSibling;
     if (lbl) lbl.textContent = 'WPNS';
   }
-
-  for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
-  if (window.startGalleryTheme) startGalleryTheme();
 }
 
 // Clears entities + timers + hides the 3D layer. Scene/renderer survive for retries.
@@ -341,9 +376,9 @@ function s2Teardown() {
 
 function s2RemoveOz() {
   if (S2.oz) S2.scene.remove(S2.oz);
-  S2.oz = null; S2.sockets = [];
-  S2._arms = null; S2.throw = null; S2.beatT = 0;
-  S2._faceMat = null; S2._staticOn = false;
+  S2.oz = null; S2.sockets = []; S2.cosmetics = [];
+  S2._arms = null; S2._legs = null; S2.throw = null; S2.beatT = 0;
+  S2._faceMat = null; S2._staticOn = false; S2._faceDead = false;
 }
 
 // === FLIGHT PHASE — drones to shoot, asteroids to dodge ===
@@ -449,7 +484,7 @@ function stage2Fire() {
   // (they sit ~60px apart on screen) can never absorb a well-aimed plant.
   if (S2.phase === 'boss' && S2.oz) {
     let sBest = null, sBestD = OZ_SOCKET_HIT_PX, sBestP = null;
-    for (const pass of [s => s.open && !s.bombed, s => !(s.open && !s.bombed)]) {
+    for (const pass of [s => s.open && s.dmg === 1, s => !(s.open && s.dmg === 1)]) {
       for (const s of S2.sockets) {
         if (!pass(s)) continue;
         const p = s2Project(s.obj.getWorldPosition(S2._pv));
@@ -460,10 +495,28 @@ function stage2Fire() {
       if (sBest) break;
     }
     if (sBest) {
-      if (sBest.open && !sBest.bombed) s2PlantBomb(sBest, sBestP);
+      if (sBest.open && sBest.dmg === 1) s2PlantBomb(sBest, sBestP);   // the critical hit
+      else if (sBest.dmg === 0)          s2ChipSocket(sBest, sBestP);  // grinding it open
       else { s2Clank(); explodeDust(sBestP.x, sBestP.y); }
       return;
     }
+
+    // Cosmetic parts — everything else on him dents and rusts too
+    let cBest = null, cBestD = Infinity, cBestP = null;
+    for (const c of S2.cosmetics) {
+      let wp;
+      if (c.ref) {
+        wp = c.ref.localToWorld(S2._pv.set(0, c.off, 0));
+      } else {
+        const [x, y] = s2SpriteLocal(c.anchor);
+        wp = S2._pv.set(x, y, 0).applyMatrix4(S2.oz.matrixWorld);
+      }
+      const p = s2Project(wp);
+      if (!p) continue;
+      const dd = Math.hypot(mouseX - p.x, mouseY - p.y);
+      if (dd < c.radPx && dd < cBestD) { cBestD = dd; cBest = c; cBestP = p; }
+    }
+    if (cBest) { s2HitCosmetic(cBest, cBestP); return; }
   }
 
   // 3. Drones
@@ -526,10 +579,26 @@ function s2BuildOz() {
     return { mesh, side };
   });
 
-  // Bomb sockets — no markers, just flash state over the art's own circles
+  // Marching legs — planes BEHIND the body plane, so the torso/pelvis armor
+  // (still baked) overlaps their tops naturally
+  S2._legs = [-1, 1].map(side => {
+    const mesh = s2PartMesh(
+      { rect: side < 0 ? OZ_LEG.rectL : OZ_LEG.rectR, size: OZ_LEG.size },
+      new THREE.MeshBasicMaterial({ map: S2._ozPartsTex, transparent: true, alphaTest: 0.02 })
+    );
+    mesh.geometry.translate(0, -(OZ_LEG.size[1] / 2 - OZ_LEG.pivotDown), 0);
+    const [px, py] = s2SpriteLocal(side < 0 ? OZ_LEG.pivotL : OZ_LEG.pivotR);
+    mesh.position.set(px, py, -0.2);
+    oz.add(mesh);
+    return { mesh, side, baseY: py };
+  });
+
+  // Bomb sockets — no markers, just flash state over the art's own circles.
+  // dmg: 0 pristine → 1 light (chip it open) → 2 heavy (the critical hit)
   S2.sockets = OZ_SOCKETS.map(def => {
+    const base = { kind: def.kind, open: false, bombed: false, chip: 0, dmg: 0, overlay: null };
     if (def.kind === 'screen') {
-      return { kind: 'screen', obj: face, mesh: null, open: false, bombed: false };
+      return { ...base, part: 'head', size: [18.3, 17.4], z: 0.1, obj: face, mesh: null };
     }
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(OZ_FLASH_SIZE, OZ_FLASH_SIZE),
@@ -542,12 +611,64 @@ function s2BuildOz() {
     mesh.position.set(x, y, 0.25);
     mesh.visible = false;
     oz.add(mesh);
-    return { kind: def.kind, obj: mesh, mesh, open: false, bombed: false };
+    const part = def.kind === 'discL' ? 'discL' : 'discR';
+    return { ...base, part, size: [10.3, 10.4], z: 0.2, obj: mesh, mesh };
   });
+
+  // Cosmetic components — not part of the win condition, but they dent,
+  // scratch, and rust when shot, because shooting a giant robot should count
+  S2.cosmetics = [
+    { part: 'torso', anchor: [0.500, 0.500], size: [11.7, 10.4], z: 0.2, radPx: 85, hits: 0, dmg: 0, overlay: null },
+    { part: 'armL', ref: S2._arms[0].mesh, off: -10, size: OZ_ARM.size, radPx: 75, hits: 0, dmg: 0 },
+    { part: 'armR', ref: S2._arms[1].mesh, off: -10, size: OZ_ARM.size, radPx: 75, hits: 0, dmg: 0 },
+    { part: 'legL', ref: S2._legs[0].mesh, off: -14, size: OZ_LEG.size, radPx: 95, hits: 0, dmg: 0 },
+    { part: 'legR', ref: S2._legs[1].mesh, off: -14, size: OZ_LEG.size, radPx: 95, hits: 0, dmg: 0 },
+  ];
 
   oz.position.set(0, 2, S2_SPAWN_Z);
   S2.scene.add(oz);
   S2.oz = oz;
+}
+
+// Re-point a part plane's UVs at a different rect (the damage sheets have
+// slightly different layouts, so rect and texture swap together)
+function s2SetPartRect(mesh, rect) {
+  const uv = mesh.geometry.attributes.uv;
+  const base = [[0, 1], [1, 1], [0, 0], [1, 0]];
+  const [u0, v0, u1, v1] = rect;
+  for (let i = 0; i < 4; i++) {
+    uv.setXY(i, u0 + base[i][0] * (u1 - u0), (1 - v1) + base[i][1] * (v1 - v0));
+  }
+  uv.needsUpdate = true;
+}
+
+// Show a component's damage state: limbs swap their own texture in place,
+// billboard components get an overlay plane of the damaged art
+function s2ApplyDamage(c) {
+  const level = c.dmg === 2 ? 'heavy' : 'light';
+  const tex   = c.dmg === 2 ? S2._heavyTex : S2._lightTex;
+  const rect  = OZ_DMG_RECTS[level][c.part];
+  if (!rect) return;
+  if (c.ref) {                       // arm/leg planes
+    c.ref.material.map = tex;
+    s2SetPartRect(c.ref, rect);
+    return;
+  }
+  if (c.overlay) {
+    c.overlay.material.map = tex;
+    s2SetPartRect(c.overlay, rect);
+  } else {
+    c.overlay = s2PartMesh({ rect, size: c.size },
+      new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.02 }));
+    const [x, y] = s2SpriteLocal(c.anchor || OZ_PARTS.find(p => p.name === c.part).anchor);
+    c.overlay.position.set(x, y, c.z);
+    S2.oz.add(c.overlay);
+  }
+  // A heavily damaged head is a dead TV: the face never comes back
+  if (c.part === 'head' && c.dmg === 2 && S2._faceMesh) {
+    S2._faceDead = true;
+    S2._faceMesh.visible = false;
+  }
 }
 
 // Soft radial light used for the disc vulnerability flash
@@ -588,6 +709,7 @@ function s2OzArrived() {
 
   const hud = document.createElement('div');
   hud.id = 'boss-hud';
+  hud.className = 'oz';   // sits above his face, not on it
   hud.innerHTML = `<div id="boss-hud-name">OZAMATRON</div>
     <div id="oz-bombs">${'<span class="oz-slot"></span>'.repeat(OZ_BOMBS_NEEDED)}</div>`;
   document.body.appendChild(hud);
@@ -669,6 +791,7 @@ function s2NoiseTexture() {
 
 function s2TvStatic(on) {
   if (!S2._faceMat) return;
+  if (!on && S2._faceDead) return;   // a smashed screen stays dead
   S2._staticOn = on;
   S2._faceMat.map = on ? s2NoiseTexture() : S2._faceTex;
 }
@@ -678,7 +801,8 @@ function s2TvStatic(on) {
 // un-bombed component starts flashing for OZ_SOCKET_OPEN_MS.
 function s2OpenSocketWindow() {
   if (S2.phase !== 'boss') return;
-  const closed = S2.sockets.filter(s => !s.bombed && !s.open);
+  // Only lightly-damaged components are eligible — chip one open first
+  const closed = S2.sockets.filter(s => s.dmg === 1 && !s.open);
   if (!closed.length) return;
   const s = closed[Math.floor(Math.random() * closed.length)];
   s2SetSocketOpen(s, true);
@@ -697,12 +821,50 @@ function s2SetSocketOpen(s, open) {
   }
 }
 
-// === BOMBS ===
+// === COMPONENT DAMAGE — chip → light → (window) → heavy ===
+function s2Tink() {
+  s2Tone(1500 + Math.random() * 400, 0.05, 'square', 0.07);
+}
+
+function s2Crunch() {
+  s2Tone(320, 0.14, 'square', 0.15);
+  setTimeout(() => s2Tone(140, 0.2, 'square', 0.13), 60);
+}
+
+// Sustained fire on a pristine core component grinds it to light damage —
+// only then does it become eligible for vulnerability windows
+function s2ChipSocket(s, p) {
+  s.chip++;
+  s2ParticleBurst(s.obj.getWorldPosition(new THREE.Vector3()), 4, 0xffee88, 0.3, 1.0);
+  s2Tink();
+  if (s.chip >= OZ_CHIP_HITS) {
+    s.dmg = 1;
+    s2ApplyDamage(s);
+    s2Crunch();
+    s2Flash('rgba(255,220,80,0.10)');
+    explodeDust(p.x, p.y);
+  }
+}
+
+function s2HitCosmetic(c, p) {
+  c.hits++;
+  const wp = c.ref
+    ? c.ref.localToWorld(new THREE.Vector3(0, c.off, 0))
+    : new THREE.Vector3(...s2SpriteLocal(c.anchor), 0).applyMatrix4(S2.oz.matrixWorld);
+  s2ParticleBurst(wp, 3, 0xffcc77, 0.25, 0.9);
+  s2Tink();
+  if (c.dmg === 0 && c.hits >= OZ_COSM_LIGHT)      { c.dmg = 1; s2ApplyDamage(c); s2Crunch(); }
+  else if (c.dmg === 1 && c.hits >= OZ_COSM_HEAVY) { c.dmg = 2; s2ApplyDamage(c); s2Crunch(); explodeDust(p.x, p.y); }
+}
+
+// === THE CRITICAL — a flashing (light-damaged) component hit in its window ===
 function s2PlantBomb(s, p) {
   s.bombed = true;
   s.open   = false;
+  s.dmg    = 2;
   clearTimeout(S2.socketTimer);
-  // armed-bomb look: the component smolders red (per-frame in s2UpdateOz)
+  s2ApplyDamage(s);   // heavy art; a dead screen never shows the face again
+  // the component also smolders red (per-frame in s2UpdateOz)
 
   S2.bombs++;
   explodeStars(p.x, p.y);
@@ -744,9 +906,10 @@ function s2Detonate() {
 
     // The robot comes apart into its actual body parts (the parts sheet):
     // TV head one way, watermelon discs another, legs straight down and out.
-    const partsMat = new THREE.MeshBasicMaterial({ map: S2._ozPartsTex, transparent: true, alphaTest: 0.02 });
+    // He comes apart already wrecked — the debris uses the heavy-damage art
+    const partsMat = new THREE.MeshBasicMaterial({ map: S2._heavyTex, transparent: true, alphaTest: 0.02 });
     for (const part of OZ_PARTS) {
-      const m = s2PartMesh(part, partsMat);
+      const m = s2PartMesh({ rect: OZ_DMG_RECTS.heavy[part.name] || part.rect, size: part.size }, partsMat);
       const [lx, ly] = s2SpriteLocal(part.anchor);
       // stagger depth so overlapping transparent shards never z-fight
       m.position.set(lx, ly, 0.4 + S2.debris.length * 0.06).applyMatrix4(S2.oz.matrixWorld);
@@ -764,8 +927,20 @@ function s2Detonate() {
     S2.oz = null; S2.sockets = [];
     if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
 
-    setTimeout(s2ShowVictory, 2200);
+    setTimeout(s2VictoryHandoff, 2200);
   }, 1450);
+}
+
+// Ozamatron down — but the REAL final boss takes the stage: stage 3, the
+// Patticus Maximus dance-off (stage3.js), owns the ending. The old victory
+// screen survives only as a fallback if stage3.js somehow isn't loaded.
+function s2VictoryHandoff() {
+  if (!window.startStage3) { s2ShowVictory(); return; }
+  s2Teardown();
+  S2.done  = true;
+  S2.phase = 'idle';
+  s2RestoreWpnsCell();
+  startStage3();
 }
 
 function s2ShowVictory() {
@@ -1235,6 +1410,16 @@ function s2UpdateOz() {
       const pump = (S2._beatSide === a.side ? 1 : 0.2) * S2._beatPulse * 0.5;
       const target = a.side * (OZ_ARM.rest + Math.sin(f * 0.03 + ph) * OZ_ARM.sway * (1 + groove * 3)) - a.side * pump;
       a.mesh.rotation.z += (target - a.mesh.rotation.z) * 0.08;
+    }
+  }
+
+  // Legs march in place — alternating weight shifts, higher steps on groove
+  if (S2._legs) {
+    for (const l of S2._legs) {
+      const ph = l.side < 0 ? 0 : Math.PI;
+      const sw = Math.sin(f * 0.05 + ph);
+      l.mesh.rotation.z = sw * (0.03 + groove * 0.05);
+      l.mesh.position.y = l.baseY + Math.max(0, sw) * (0.55 + groove * 1.8);
     }
   }
 

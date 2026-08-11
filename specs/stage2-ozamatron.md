@@ -8,7 +8,8 @@ are 3D models (placeholders for now). At the end of the run a giant robot, **OZA
 the way. He cannot be shot down; the player must **plant 3 bombs** into glowing sockets that only
 open in timed windows — good timing and accuracy, or nothing.
 
-This is the second boss and the game's current ending.
+This is the second boss. Destroying him no longer ends the game — it hands off to
+**stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-dance.md)).
 
 ## Behavior
 
@@ -71,19 +72,29 @@ This is the second boss and the game's current ending.
   flood-labeling the sheet; the sheet itself now contains only the nine used parts (all strays —
   bent arms, foot, treads, fruit icons, labels — are erased). If the art is regenerated, re-run
   that measurement rather than eyeballing rects.
-- **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself. There are
-  **no markers**: the component itself flashes while vulnerable — discs get a pulsing additive
-  glow, the TV face pulses green. A window opens **the moment a throw's orbs leave his fist**
-  (dodge the fruit, then punish) and lasts `OZ_SOCKET_OPEN_MS`; one random un-bombed component
-  per throw.
-  - **Timing:** a shot only plants while the component is flashing.
-  - **Accuracy:** the shot must land within `OZ_SOCKET_HIT_PX` (72px) of the socket's projected
-    center — tighter than the gallery's 110px assist.
-  - A shot on a **dark** (closed) component clanks and sparks; it teaches the rule without
-    punishing.
-- A planted bomb leaves the component **smoldering red** (dim blinking glow; the screen's face
-  tints red), fills a HUD slot, flashes green, and makes Ozamatron angrier: volley interval
-  multiplies by **0.78 per bomb** and each volley gains an orb (1 → 2 → 3).
+- **Three-stage component damage** replaces the old plant-a-bomb rule. The three core components
+  (the two watermelon shoulder discs and the CRT screen) each walk pristine → light → heavy, with
+  matching art from two extra keyed sheets (`boss/ozamatron-parts-light.png` — scratched/dented —
+  and `-heavy.png` — rusted/smashed). The sheets' layouts differ slightly from the pristine one,
+  so per-sheet crop rects live in `OZ_DMG_RECTS`; limbs swap their own plane's texture+UVs in
+  place, billboard components get an overlay plane of the damaged art.
+  1. **Chip it open**: `OZ_CHIP_HITS` (6) shots on a pristine core component — any time, sparks
+     and a tink per hit — grind it to **light damage** (crunch, dust, flash).
+  2. **Only light-damaged components are window-eligible.** A window opens after each throw and
+     laser burst (`OZ_SOCKET_OPEN_MS`), the component itself flashing — discs with a pulsing
+     additive glow, the TV face pulsing green. No markers.
+  3. **The critical**: a hit within `OZ_SOCKET_HIT_PX` (72px) while flashing → **heavy damage**:
+     rusted/smashed art, a HUD slot fills, chest-beat rage, attacks speed up (× 0.78) and grow
+     (+1 orb). A heavily-damaged screen is a **dead TV** — the face never comes back.
+  - A shot on an ineligible/dark component clanks; heavy components smolder red.
+- **Everything else dents too.** Torso, arms, and legs are cosmetic damage targets
+  (`OZ_COSM_LIGHT` 5 hits → light, `OZ_COSM_HEAVY` 12 → heavy) — no gameplay effect, pure
+  destruction feedback, and the detonation debris uses the heavy sheet so he comes apart wrecked.
+- **He marches.** The baked legs are erased from the body texture (pelvis armor stays) and
+  replaced with hip-pivoted planes (`OZ_LEG`, z −0.2 behind the body so the torso overlaps their
+  tops) that shift weight and step in place, higher with the groove.
+- Ozamatron's name plate + slots use `#boss-hud.oz` at `top: 84px` — above his face (Jake keeps
+  the original 218px).
 - **Attacks rotate: throw → laser → throw → missiles.** The attack timer walks that cycle at
   `OZ_ATTACK_MS` (× 0.78 per bomb):
   - **Throws, ape-style** (`OZ_THROW`): the arm winds up overhead over 26 frames — **the wind-up
@@ -118,10 +129,11 @@ Third bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white f
 robot comes apart into its **actual body parts** — nine debris planes cut from a second texture
 (`boss/ozamatron-parts.png`, a generated exploded-parts sheet keyed the same way): TV head,
 antenna cap, both shoulder discs, arms, torso core, legs — each flung outward from its true
-position on the body. A **victory screen** (*OZAMATRON DESTROYED / PNUT SAVES
-THE GALAXY… FOR NOW*) offers `[ RETURN TO THE GALLERY ]`, which restores the WPNS cell, brings the
-2D starfield back, and respawns the gallery. `STAGE2.done` prevents any retrigger; the gallery is
-endless from there.
+position on the body. Once the debris clears (~2.2s), `s2VictoryHandoff()` tears stage 2 down
+(starfield back, WPNS cell restored, `STAGE2.done` set) and hands straight to **stage 3, the
+dance-off** ([stage3-dance.md](stage3-dance.md)) — no intermission. The old *OZAMATRON
+DESTROYED* victory screen (`s2ShowVictory`) survives only as a fallback if `stage3.js` isn't
+loaded; `STAGE2.done` prevents any stage-2 retrigger either way.
 
 ### Defeat
 
@@ -144,6 +156,10 @@ All in the config block at the top of `stage2.js`.
 | `S2_ASTEROID_MS` | 1800 / 2600 mobile | Hazard cadence. |
 | `OZ_BOMBS_NEEDED` | 3 | Bombs to win. |
 | `OZ_SOCKET_OPEN_MS` | 1500 / 1900 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
+| `OZ_CHIP_HITS` | 6 | Shots to grind a core component to light damage. |
+| `OZ_COSM_LIGHT` / `OZ_COSM_HEAVY` | 5 / 12 | Cosmetic part damage thresholds (visual only). |
+| `OZ_DMG_RECTS` | per-sheet rects | Damage-sheet crops (auto-measured; layouts differ). |
+| `OZ_LEG` | rects + hip pivots | The marching leg planes. |
 | `OZ_FLASH_SIZE` | 11 u | Disc glow plane size. |
 | `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
 | `OZ_ATTACK_MS` | 3000 × 0.78^bombs | Attack cadence, angrier per bomb. |
@@ -197,8 +213,9 @@ Handled in `script.js`'s manifest `.then()` + `startStage2()`. Testing-only — 
 - **The boss art source files** are Gemini-generated (`robot.png` full body, `robot_sprite.png`
   parts sheet, in the user's Downloads). The repo carries only the keyed 1024² PNGs; the keying
   scripts were flood-fill from image borders so interior blacks/grays survived.
-- **Jake still can't be refought on a win path**, and stage 2 ends in an endless gallery. Whether
-  score 30+ should loop stages, escalate, or roll credits is undecided.
+- **Jake still can't be refought on a win path.** The run now ends through stage 3's dance-off
+  rather than an endless-gallery victory screen; whether the post-dance gallery should loop
+  stages or escalate is still undecided.
 - **Stage-2 retry keeps score.** Deliberate (retrying the hard part shouldn't cost the run), but it
   means score no longer equals gallery kills once a retry has happened.
 - **Orb shot gives no score**, matching Jake's panels. Revisit if scoring ever matters.
