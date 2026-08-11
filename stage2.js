@@ -25,7 +25,7 @@ const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (ac
 const OZ_ATTACK_MS       = 3000;                  // attack cadence, shrinks per bomb
 const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
 
-const S2_SHIELD_FR       = 540;                   // shield recharge, frames (~9s)
+const S2_SHIELD_FR       = 270;                   // shield recharge, frames (~4.5s)
 const OZ_LASER_SPEED     = 4.6;                   // laser bolts — fast, dodge only
 const OZ_LASER_BOLTS     = 3;                     // bolts per burst
 const OZ_MISSILE_SPEED   = 0.95;                  // homing missiles — slow but they follow

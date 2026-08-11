@@ -21,11 +21,12 @@ Drawn in order by `drawHudOverlay()` (`script.js:403`):
 
 1. **Corner brackets** — 64px L-shapes inset 18px from each corner, cyan with a 12px glow. Purely
    decorative framing.
-2. **Lock-on brackets** — orange `#ff6600` corner ticks around the nearest live target within
-   `HIT_RADIUS` of the cursor: the target the next shot will kill. This is the game's only aiming
-   feedback, and it has to agree exactly with `fireShot()`'s hit test — same radius, same
-   nearest-wins rule. **Suppressed for targets wider than 550px**, since brackets around a target
-   that nearly fills the screen read as noise rather than a lock.
+2. **Lock-on brackets** — orange `#ff6600` corner ticks around the nearest hittable target: the
+   target the next shot will kill. The brackets **rotate with the photo** (canvas
+   translate+rotate) so they hug the tilted rectangle exactly, and target selection uses the same
+   rotated-rect distance test as `fireShot()` (`distToTarget` / `targetHitMargin`) — same math,
+   same nearest-wins rule. **Suppressed for targets wider than 550px**, since brackets around a
+   target that nearly fills the screen read as noise rather than a lock.
 3. **The crosshair**, at the cursor, if the cursor is on screen.
 4. **Shoot flash** — a white ring expanding to 50px radius and fading over 200ms from the point of
    the last shot. Fires on every shot including misses, so the gun always feels like it went off.
@@ -104,7 +105,8 @@ The full stack, since it's easy to break:
 ## Implementation notes
 
 - Both canvases are resized on `window.resize`; the starfield is re-initialised at the same time.
-- The lock-on search reuses the same nearest-within-`HIT_RADIUS` scan as `fireShot()`. If one
-  changes, both must — a lock-on that disagrees with the hit test is worse than no lock-on.
+- The lock-on search reuses `distToTarget()`/`targetHitMargin()` — the exact functions
+  `fireShot()` uses. If the hit test changes, both change together — a lock-on that disagrees
+  with the hit test is worse than no lock-on.
 - The whole canvas is `clearRect`'d and redrawn per frame. At this element count that's cheaper than
   tracking dirty regions, and it keeps the draw code linear.

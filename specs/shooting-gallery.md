@@ -58,9 +58,13 @@ z-fighting flicker (commit c2d18e0).
 
 ## Shooting
 
-- **Hit test:** on each shot, find the nearest live target within `HIT_RADIUS` of the cursor and
-  kill it. One shot kills one target. A shot that hits nothing is still a shot — it plays the pew
-  and draws the flash ring.
+- **Hit test:** on each shot, the cursor is inverse-rotated into each photo's own frame and
+  tested against the actual rotated rectangle (`distToTarget()` — 0 means inside). A shot lands
+  if that distance is under `targetHitMargin(t)`: `max(40, HIT_RADIUS − min(w,h)/2)` px of grace
+  outside the rect — generous for tiny far-away targets (preserving the old 110px-from-center
+  feel), tight for big ones you can simply hit. Anywhere on a photo — corners of tilted ones
+  included — always registers. Nearest-by-distance wins; one shot kills one target. A shot that
+  hits nothing is still a shot — it plays the pew and draws the flash ring.
 - **Autofire:** mouse-down or touch-start fires immediately, then repeats every `FIRE_RATE_MS`
   until release. Holding is the intended way to play.
 - **Touch:** each tap sets the cursor position from the touch point before firing, so taps hit where

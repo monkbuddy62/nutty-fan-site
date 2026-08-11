@@ -99,7 +99,7 @@ This is the second boss and the game's current ending.
     missiles — they linger).
 - **The ship has a shield**: a soft additive bubble that tanks exactly one hit from anything
   (orb, laser, missile, asteroid), then shatters in a particle burst and recharges over
-  `S2_SHIELD_FR` (~9s) with a two-note chime on restore. HUD shows `⛨` when up, `◌` while
+  `S2_SHIELD_FR` (~4.5s) with a two-note chime on restore. HUD shows `⛨` when up, `◌` while
   recharging, before the hearts.
 - **Particles**: a pooled system (`S2_PARTICLES` additive glow sprites, 130 desktop / 70 mobile)
   drives missile exhaust, laser trails, muzzle flashes, impact sparks, and the shield break —
@@ -148,7 +148,7 @@ All in the config block at the top of `stage2.js`.
 | `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
 | `OZ_ATTACK_MS` | 3000 × 0.78^bombs | Attack cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
-| `S2_SHIELD_FR` | 540 frames (~9s) | Shield recharge after a tanked hit. |
+| `S2_SHIELD_FR` | 270 frames (~4.5s) | Shield recharge after a tanked hit. |
 | `OZ_LASER_SPEED` / `OZ_LASER_BOLTS` | 4.6 u/f, 3 | Laser burst — dodge-only pressure. |
 | `OZ_MISSILE_SPEED` / `OZ_MISSILE_TURN` | 0.95 u/f, 0.05 | Homing missiles — slow but persistent. |
 | `S2_PARTICLES` | 130 / 70 mobile | Particle pool size. |

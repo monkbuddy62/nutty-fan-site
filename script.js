@@ -477,28 +477,31 @@ function drawHudOverlay() {
   xhCtx.stroke();
   xhCtx.restore();
 
-  // Lock-on brackets around nearest target in range
-  let locked = null, nearestD = HIT_RADIUS;
+  // Lock-on brackets around the nearest hittable target — same rotated-rect
+  // math as the hit test, so what locks is exactly what a shot would hit
+  let locked = null, nearestD = Infinity;
   for (const t of targets) {
     if (t.dead) continue;
-    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
-    if (d < nearestD) { nearestD = d; locked = t; }
+    const d = distToTarget(mouseX, mouseY, t);
+    if (d < targetHitMargin(t) && d < nearestD) { nearestD = d; locked = t; }
   }
   if (locked && locked.w < 550) {
     const pad = 12, tl = 20;
-    const lx = locked.screenX - locked.w/2 - pad, ly = locked.screenY - locked.h/2 - pad;
-    const rx = locked.screenX + locked.w/2 + pad, ry = locked.screenY + locked.h/2 + pad;
+    const hw = locked.w / 2 + pad, hh = locked.h / 2 + pad;
     xhCtx.save();
+    // Rotate the whole bracket frame with the photo
+    xhCtx.translate(locked.screenX, locked.screenY);
+    xhCtx.rotate(locked.rot * Math.PI / 180);
     xhCtx.strokeStyle = '#ff6600';
     xhCtx.shadowColor = '#ff6600';
     xhCtx.shadowBlur  = 14;
     xhCtx.lineWidth   = 1.5;
     xhCtx.lineCap     = 'square';
     xhCtx.beginPath();
-    xhCtx.moveTo(lx+tl,ly); xhCtx.lineTo(lx,ly); xhCtx.lineTo(lx,ly+tl);
-    xhCtx.moveTo(rx-tl,ly); xhCtx.lineTo(rx,ly); xhCtx.lineTo(rx,ly+tl);
-    xhCtx.moveTo(lx,ry-tl); xhCtx.lineTo(lx,ry); xhCtx.lineTo(lx+tl,ry);
-    xhCtx.moveTo(rx,ry-tl); xhCtx.lineTo(rx,ry); xhCtx.lineTo(rx-tl,ry);
+    xhCtx.moveTo(-hw+tl,-hh); xhCtx.lineTo(-hw,-hh); xhCtx.lineTo(-hw,-hh+tl);
+    xhCtx.moveTo( hw-tl,-hh); xhCtx.lineTo( hw,-hh); xhCtx.lineTo( hw,-hh+tl);
+    xhCtx.moveTo(-hw, hh-tl); xhCtx.lineTo(-hw, hh); xhCtx.lineTo(-hw+tl, hh);
+    xhCtx.moveTo( hw, hh-tl); xhCtx.lineTo( hw, hh); xhCtx.lineTo( hw-tl, hh);
     xhCtx.stroke();
     xhCtx.restore();
   }
@@ -582,6 +585,27 @@ function drawCrosshairAt(x, y) {
   xhCtx.restore();
 }
 
+// === TARGETING — rotated-rect hit math shared by lock-on and shots ===
+// Distance from a screen point to a target's rotated rectangle (0 = inside).
+// The cursor is inverse-rotated into the photo's own frame first, so corners
+// of tilted photos are exactly as hittable as they look.
+function distToTarget(px, py, t) {
+  const a   = t.rot * Math.PI / 180;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  const dx  = px - t.screenX, dy = py - t.screenY;
+  const lx  =  dx * cos + dy * sin;
+  const ly  = -dx * sin + dy * cos;
+  const qx  = Math.max(0, Math.abs(lx) - t.w / 2);
+  const qy  = Math.max(0, Math.abs(ly) - t.h / 2);
+  return Math.hypot(qx, qy);
+}
+
+// Grace margin outside the rect: generous for tiny far-away targets (matches
+// the old 110px-from-center feel), tighter for big ones you can just hit.
+function targetHitMargin(t) {
+  return Math.max(40, HIT_RADIUS - Math.min(t.w, t.h) / 2);
+}
+
 // === AUTOFIRE — hold mouse to spam pew pew pew ===
 function fireShot() {
   playPew();
@@ -612,12 +636,12 @@ function fireShot() {
     }
   }
 
-  // Normal targets
-  let nearest = null, nearestD = HIT_RADIUS;
+  // Normal targets — anywhere on the rotated photo (plus grace margin) hits
+  let nearest = null, nearestD = Infinity;
   for (const t of targets) {
     if (t.dead) continue;
-    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
-    if (d < nearestD) { nearestD = d; nearest = t; }
+    const d = distToTarget(mouseX, mouseY, t);
+    if (d < targetHitMargin(t) && d < nearestD) { nearestD = d; nearest = t; }
   }
   if (nearest) shootTarget(nearest);
 }
