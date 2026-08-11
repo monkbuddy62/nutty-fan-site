@@ -43,11 +43,13 @@ This is the second boss and the game's current ending.
 
 ### Ozamatron
 
-- A **billboard sprite**: one `OZ_SIZE` (38-unit) textured plane showing `boss/ozamatron.png` — a
-  fruit-armored mecha with a CRT television head ("FRUIT-VISION CRT-86"), generated art with the
-  background keyed out (1024² RGBA). Transformer-scale, no transforming. Glides in from the fog
-  over ~5s, then holds at `OZ_HOLD_Z`, bobbing with slight sway/roll (small angles — it's flat).
-  Name plate reuses the `#boss-hud` styling with **3 bomb slots** instead of an HP bar.
+- A **billboard sprite with animated arms**: an `OZ_SIZE` (55-unit) plane showing
+  `boss/ozamatron.png` — a fruit-armored mecha with a CRT television head ("FRUIT-VISION CRT-86"),
+  generated art with the background keyed out (1024² RGBA). The baked-in arms are **erased from
+  the body texture** and replaced by two shoulder-pivoted arm planes (bent-arm crops from the
+  parts sheet), so the arms genuinely move: gorilla idle sway, wind-up, throws, chest-beats.
+  Glides in from the fog over ~5s, then holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing
+  heavily. Name plate reuses the `#boss-hud` styling with **3 bomb slots** instead of an HP bar.
 - Anchor points (sockets, orb muzzles, debris placement) are `OZ_ANCHORS`/`OZ_PARTS` image-fraction
   coordinates measured off the art — if the art is regenerated, re-measure them.
 - **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself, each with a
@@ -61,10 +63,14 @@ This is the second boss and the game's current ending.
 - A planted bomb turns the socket into a blinking red charge, fills a HUD slot, flashes green, and
   makes Ozamatron angrier: volley interval multiplies by **0.78 per bomb** and each volley gains
   an orb (1 → 2 → 3).
-- **Attacks:** telegraphed (the whole sprite flashes warm for 420ms), then orange orbs launch
-  **from the antenna tips** aimed at the ship's position. Orbs are shootable, like Jake's panels;
-  an orb reaching the ship costs a life and shakes the camera. Orbs deliberately spawn far from
-  every socket — shot priority is orbs-first, so an orb born next to a socket would shield it.
+- **Attacks are thrown, ape-style.** The attack timer starts a throw cycle (`OZ_THROW`): the arm
+  winds up overhead over 26 frames — **the wind-up is the telegraph** — quivers for 8, then snaps
+  down in 6, releasing orbs **from the fist** mid-snap while the body lunges forward. Arms
+  alternate. Orbs are shootable, like Jake's panels; an orb reaching the ship costs a life and
+  shakes the camera. The release point (a raised fist) is far from every socket at the moment of
+  release — shot priority is orbs-first, so an orb born next to a socket would shield it.
+- **Chest-beat rage:** each planted bomb triggers a 40-frame alternating chest-beat with low
+  thump tones and camera shake; throws pause while he rages.
 - Lives: 3, shown in the same repurposed WPNS→LIVES HUD cell as the Jake fight.
 
 ### Victory
@@ -105,9 +111,17 @@ All in the config block at the top of `stage2.js`.
 | `OZ_ATTACK_MS` | 3400 × 0.78^bombs | Volley cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
 | `OZ_HOLD_Z` | −85 | Where the robot parks — fills the view without clipping. |
-| `OZ_SIZE` | 38 u | Billboard plane size (square, matches the square art). |
-| `OZ_ANCHORS` | image fractions | Socket + antenna positions measured off the art. |
+| `OZ_SIZE` | 55 u | Billboard plane size (square, matches the square art). |
+| `OZ_ANCHORS` | image fractions | Socket positions measured off the art. |
+| `OZ_ARM` | rects + pivots | Arm crops, shoulder pivots, fist release point, sway tuning. |
+| `OZ_THROW` | 26/8/6/40 frames | Windup / hold / snap / recover; windup 2.4 rad overhead. |
 | `OZ_PARTS` | 9 uv rects | Parts-sheet crops + body anchors for the detonation debris. |
+
+### Debug warp
+
+`?fight=stage2` skips the gallery and Jake entirely and enters the flight phase on load;
+`?fight=ozamatron` goes straight to the boss approach (and its retries also skip the flight).
+Handled in `script.js`'s manifest `.then()` + `startStage2()`. Testing-only — no UI exposes it.
 
 ## Implementation
 

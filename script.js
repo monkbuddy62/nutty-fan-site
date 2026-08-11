@@ -621,8 +621,20 @@ fetch('media/manifest.json')
     mediaFiles = files;
     loadingScreen.classList.add('gone');
     initStars();
-    for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     requestAnimationFrame(loop);
+
+    // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the boss
+    const fight = new URLSearchParams(location.search).get('fight');
+    if ((fight === 'stage2' || fight === 'ozamatron') && window.STAGE2) {
+      jakeDefeated = true;
+      score = STAGE2_SCORE;
+      scoreVal.textContent = String(score).padStart(3, '0');
+      STAGE2.skipToBoss = fight === 'ozamatron';
+      enterStage2();
+      return;
+    }
+
+    for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     setTimeout(showShootHint, 1200);
   })
   .catch(() => {

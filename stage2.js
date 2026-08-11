@@ -25,31 +25,52 @@ const OZ_SOCKET_GAP_MS   = 1100;                  // all-closed pause between wi
 const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (accuracy)
 const OZ_ATTACK_MS       = 3400;                  // orb volley cadence, shrinks per bomb
 const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
-const OZ_HOLD_Z          = -85;                   // where Ozamatron parks
+const OZ_HOLD_Z          = -70;                   // where Ozamatron parks — close and huge
 const OZ_APPROACH_FR     = 300;                   // frames of approach glide (~5s)
-const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, 1024² RGBA
-const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet for the detonation
-const OZ_SIZE            = 38;                    // sprite plane size in world units (square)
-// Socket + antenna anchor points as fractions of the sprite image (x→right, y→down)
+const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, arms erased
+const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet (arms + debris)
+const OZ_SIZE            = 55;                    // sprite plane size in world units (square)
+// Socket anchor points as fractions of the sprite image (x→right, y→down)
 const OZ_ANCHORS = {
   screen:    [0.495, 0.271],   // the FRUIT-VISION CRT face
-  shoulderL: [0.200, 0.337],   // watermelon disc, left
-  shoulderR: [0.801, 0.337],   // watermelon disc, right
-  antennaL:  [0.400, 0.030],   // orb muzzles — far from every socket
-  antennaR:  [0.600, 0.030],
+  shoulderL: [0.200, 0.326],   // watermelon disc, left
+  shoulderR: [0.801, 0.326],   // watermelon disc, right
+};
+// Overlay arms: separate planes pivoted at the shoulders so Ozamatron can
+// wind up and hurl orbs like a gorilla. The baked-in arms were erased from
+// the body texture; these use the bent-arm crops from the parts sheet.
+const OZ_ARM = {
+  // Outer straight-arm crops — clean columns on the sheet edges, no neighbors
+  rectL:  [0.018, 0.344, 0.164, 0.664],
+  rectR:  [0.835, 0.344, 0.981, 0.664],
+  size:   [10.5, 24.5],          // world units — beefy, like the original art
+  pivotL: [0.205, 0.350],        // shoulder joints on the body sprite
+  pivotR: [0.795, 0.350],
+  pivotIn: 0.6,                  // pivot sits this far inboard of the part center
+  pivotDown: 2.5,                //  …and this far below its top edge
+  fist:  [0.6, -19],             // orb release point in arm-local units (x mirrored for R)
+  rest:  0.12,                   // resting outward splay, radians
+  sway:  0.10,                   // idle gorilla sway amplitude
+};
+// Throw cycle in frames: windup raises the arm overhead (this IS the
+// telegraph), a short hold, then the snap hurls the orbs from the fist.
+const OZ_THROW = {
+  windup: 26, hold: 8, snapLen: 6, recover: 40,
+  windupAng: 2.4,                // radians past rest, overhead-outboard
+  snapAng: 0.35,                 // follow-through past straight down
 };
 // Detonation debris cut from the parts sheet: uv rect (x→right, y→down),
 // anchor = where the part sits on the standing sprite, size in world units.
 const OZ_PARTS = [
-  { rect: [0.376, 0.054, 0.620, 0.288], anchor: [0.495, 0.270], size: [12.5, 12.0] }, // TV head
-  { rect: [0.630, 0.029, 0.771, 0.127], anchor: [0.500, 0.075], size: [4.2, 2.9] },   // antenna cap
-  { rect: [0.029, 0.073, 0.200, 0.249], anchor: [0.200, 0.335], size: [7.0, 7.2] },   // disc L
-  { rect: [0.791, 0.078, 0.952, 0.254], anchor: [0.800, 0.335], size: [7.0, 7.2] },   // disc R
-  { rect: [0.161, 0.259, 0.347, 0.640], anchor: [0.115, 0.620], size: [6.5, 13.3] },  // arm L
-  { rect: [0.654, 0.259, 0.840, 0.640], anchor: [0.885, 0.620], size: [6.5, 13.3] },  // arm R
-  { rect: [0.391, 0.308, 0.615, 0.505], anchor: [0.500, 0.500], size: [8.2, 7.2] },   // torso core
-  { rect: [0.278, 0.469, 0.488, 0.986], anchor: [0.400, 0.730], size: [8.0, 19.8] },  // leg L
-  { rect: [0.518, 0.469, 0.737, 0.986], anchor: [0.600, 0.730], size: [8.0, 19.8] },  // leg R
+  { rect: [0.376, 0.054, 0.620, 0.288], anchor: [0.495, 0.270], size: [18.1, 17.4] }, // TV head
+  { rect: [0.630, 0.029, 0.771, 0.127], anchor: [0.500, 0.075], size: [6.1, 4.2] },   // antenna cap
+  { rect: [0.029, 0.073, 0.200, 0.249], anchor: [0.200, 0.335], size: [10.2, 10.4] }, // disc L
+  { rect: [0.791, 0.078, 0.952, 0.254], anchor: [0.800, 0.335], size: [10.2, 10.4] }, // disc R
+  { rect: [0.018, 0.344, 0.164, 0.664], anchor: [0.115, 0.620], size: [10.5, 24.5] }, // arm L
+  { rect: [0.835, 0.344, 0.981, 0.664], anchor: [0.885, 0.620], size: [10.5, 24.5] }, // arm R
+  { rect: [0.391, 0.308, 0.615, 0.505], anchor: [0.500, 0.500], size: [11.9, 10.4] }, // torso core
+  { rect: [0.278, 0.469, 0.488, 0.986], anchor: [0.400, 0.730], size: [11.6, 28.7] }, // leg L
+  { rect: [0.518, 0.469, 0.737, 0.986], anchor: [0.600, 0.730], size: [11.6, 28.7] }, // leg R
 ];
 
 // === STATE ===
@@ -61,6 +82,7 @@ const S2 = {
   ship: null, halfW: 16, halfH: 9, shake: 0,
   clouds: [], drones: [], asteroids: [], orbs: [],
   oz: null, sockets: [], debris: [],
+  throw: null, beatT: 0, _nextArm: 0, _arms: null,
   approachFrame: 0, lastAsteroid: 0, lastDroneFrame: 0,
   socketTimer: null, attackTimer: null,
   hudEl: null,
@@ -184,7 +206,17 @@ function startStage2() {
   S2.cvs.classList.add('visible');
   S2.ship.position.set(0, -S2.halfH, S2_SHIP_Z + 8);   // fly in from bottom
 
+  S2.throw = null; S2.beatT = 0;
   s2SetLives();
+
+  // Debug warp (?fight=ozamatron): skip the flight, go straight to the boss
+  if (S2.skipToBoss) {
+    S2.skipToBoss = false;
+    S2._debugBoss = true;   // retries also skip the flight
+    S2.kills = S2_KILLS_TO_BOSS;
+    s2BeginApproach();
+    return;
+  }
   s2Banner('STAGE 2 // DEEP SPACE');
 }
 
@@ -224,6 +256,7 @@ function s2Teardown() {
 function s2RemoveOz() {
   if (S2.oz) S2.scene.remove(S2.oz);
   S2.oz = null; S2.sockets = [];
+  S2._arms = null; S2.throw = null; S2.beatT = 0;
 }
 
 // === FLIGHT PHASE — drones to shoot, asteroids to dodge ===
@@ -379,6 +412,20 @@ function s2BuildOz() {
   S2._ozMat = new THREE.MeshBasicMaterial({ map: S2._ozTex, transparent: true, alphaTest: 0.02 });
   oz.add(new THREE.Mesh(new THREE.PlaneGeometry(OZ_SIZE, OZ_SIZE), S2._ozMat));
 
+  // Gorilla arms: shoulder-pivoted planes, animated in s2UpdateOz
+  const armMat = new THREE.MeshBasicMaterial({ map: S2._ozPartsTex, transparent: true, alphaTest: 0.02 });
+  S2._arms = [-1, 1].map(side => {
+    const mesh = s2PartMesh({ rect: side < 0 ? OZ_ARM.rectL : OZ_ARM.rectR, size: OZ_ARM.size }, armMat);
+    // Move the geometry so the shoulder pad sits at the origin — rotation.z
+    // then swings the whole arm around the shoulder joint
+    mesh.geometry.translate(side * OZ_ARM.pivotIn, -(OZ_ARM.size[1] / 2 - OZ_ARM.pivotDown), 0);
+    const [px, py] = s2SpriteLocal(side < 0 ? OZ_ARM.pivotL : OZ_ARM.pivotR);
+    mesh.position.set(px, py, 0.3);   // in front of the body, behind the sockets
+    mesh.rotation.z = side * OZ_ARM.rest;
+    oz.add(mesh);
+    return { mesh, side };
+  });
+
   // Bomb sockets ride just in front of the art's own circles:
   // both watermelon shoulder discs + the CRT screen itself
   const mk = f => { const [x, y] = s2SpriteLocal(f); return s2BuildSocket(oz, x, y, 0.6); };
@@ -393,8 +440,8 @@ function s2BuildSocket(parent, x, y, z) {
   const group = new THREE.Group();
   const ringMat = new THREE.MeshLambertMaterial({ color: 0x445566, emissive: 0x111111 });
   const coreMat = new THREE.MeshLambertMaterial({ color: 0x222a33, emissive: 0x050808 });
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.32, 8, 24), ringMat);
-  const core = new THREE.Mesh(new THREE.SphereGeometry(1.3, 12, 10), coreMat);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(3.1, 0.42, 8, 24), ringMat);
+  const core = new THREE.Mesh(new THREE.SphereGeometry(1.8, 12, 10), coreMat);
   group.add(ring); group.add(core);
   group.position.set(x, y, z);
   parent.add(group);
@@ -464,6 +511,7 @@ function s2PlantBomb(s, p) {
   explodeStars(p.x, p.y);
   s2PlantJingle();
   s2Flash('rgba(0,255,130,0.18)');
+  S2.beatT = 40;   // furious chest-beat — throws pause while he rages
   const slots = document.querySelectorAll('.oz-slot');
   for (let i = 0; i < S2.bombs && i < slots.length; i++) slots[i].classList.add('planted');
 
@@ -533,44 +581,72 @@ function s2ShowVictory() {
   document.getElementById('galleryBtn').addEventListener('click', s2ReturnToGallery);
 }
 
-// === ATTACKS — telegraphed orb volleys aimed at the ship ===
+// === ATTACKS — gorilla throws: windup overhead, snap, orbs from the fist ===
 function s2AttackLoop() {
   if (S2.phase !== 'boss') return;
   const interval = OZ_ATTACK_MS * Math.pow(0.78, S2.bombs);
   S2.attackTimer = setTimeout(() => {
     if (S2.phase !== 'boss') return;
-    s2Telegraph();
-    setTimeout(() => { if (S2.phase === 'boss') s2FireOrbs(); }, 420);
+    if (!S2.throw && S2.beatT <= 0) {
+      S2.throw = { arm: S2._arms[S2._nextArm], t: 0, released: false };
+      S2._nextArm = 1 - S2._nextArm;
+      s2Tone(140, 0.3, 'sawtooth', 0.1);   // windup growl
+    }
     s2AttackLoop();
   }, interval);
 }
 
-function s2Telegraph() {
-  if (!S2._ozMat) return;
-  S2._ozMat.color.setHex(0xffd27a);   // whole sprite flashes warm — "he's charging"
-  setTimeout(() => { if (S2._ozMat) S2._ozMat.color.setHex(0xffffff); }, 420);
+// Animated every frame from s2UpdateOz while a throw is live
+function s2UpdateThrow() {
+  const th = S2.throw;
+  const { windup, hold, snapLen, recover, windupAng, snapAng } = OZ_THROW;
+  const { mesh, side } = th.arm;
+  const rest = side * OZ_ARM.rest;
+  const up   = side * (OZ_ARM.rest + windupAng);
+  const down = -side * snapAng;
+  th.t++;
+
+  if (th.t <= windup) {                        // raise overhead (the telegraph)
+    const k = th.t / windup;
+    mesh.rotation.z = rest + (up - rest) * (1 - Math.pow(1 - k, 2));
+  } else if (th.t <= windup + hold) {          // quiver at the top
+    mesh.rotation.z = up + Math.sin(th.t * 1.4) * 0.05;
+  } else if (th.t <= windup + hold + snapLen) { // the hurl
+    const k = (th.t - windup - hold) / snapLen;
+    mesh.rotation.z = up + (down - up) * k * k;
+    if (!th.released && k >= 0.6) {
+      th.released = true;
+      s2ReleaseOrbs(th.arm);
+      S2.oz.position.z += 2.2;                 // body lunges with the throw
+    }
+  } else if (th.t <= windup + hold + snapLen + recover) {
+    const k = (th.t - windup - hold - snapLen) / recover;
+    mesh.rotation.z = down + (rest - down) * k * (2 - k);
+  } else {
+    mesh.rotation.z = rest;
+    S2.throw = null;
+  }
 }
 
-function s2FireOrbs() {
+function s2ReleaseOrbs(arm) {
   if (!S2.oz) return;
-  const n = 1 + S2.bombs;   // 1 → 3 orbs per volley as bombs land
+  const fist = new THREE.Vector3(-arm.side * OZ_ARM.fist[0], OZ_ARM.fist[1], 0.5);
+  arm.mesh.localToWorld(fist);
+  const n = 1 + S2.bombs;   // 1 → 3 orbs per throw as bombs land
   for (let i = 0; i < n; i++) {
-    // Fired from the antenna tips — far from every socket, so orbs can't
-    // shield a socket from shots (orbs have hit priority)
-    const [ax, ay] = s2SpriteLocal(OZ_ANCHORS[i % 2 === 0 ? 'antennaL' : 'antennaR']);
-    const origin = new THREE.Vector3(ax, ay, 0.5).applyMatrix4(S2.oz.matrixWorld);
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(1.0, 10, 8),
       new THREE.MeshLambertMaterial({ color: 0xff6600, emissive: 0xff4400 })
     );
-    mesh.position.copy(origin);
-    const vel = S2.ship.position.clone().sub(origin).normalize().multiplyScalar(OZ_ORB_SPEED);
-    vel.x += (Math.random() - 0.5) * 0.25;
-    vel.y += (Math.random() - 0.5) * 0.25;
+    mesh.position.copy(fist);
+    const vel = S2.ship.position.clone().sub(fist).normalize().multiplyScalar(OZ_ORB_SPEED);
+    vel.x += (Math.random() - 0.5) * 0.3;
+    vel.y += (Math.random() - 0.5) * 0.3;
     S2.scene.add(mesh);
     S2.orbs.push({ mesh, vel });
   }
   s2Tone(180, 0.18, 'sawtooth', 0.12);
+  S2.shake = Math.max(S2.shake, 5);
 }
 
 // === DAMAGE / GAME OVER ===
@@ -611,6 +687,11 @@ function s2Retry() {
   S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
   S2.ship.position.set(0, -S2.halfH, S2_SHIP_Z + 8);
   s2SetLives();
+  if (S2._debugBoss) {   // ?fight=ozamatron session — retry straight into the boss
+    S2.kills = S2_KILLS_TO_BOSS;
+    s2BeginApproach();
+    return;
+  }
   s2Banner('STAGE 2 // DEEP SPACE');
 }
 
@@ -744,11 +825,36 @@ function s2UpdateOz() {
     if (t >= 1) s2OzArrived();
   }
 
-  // Idle menace: bob, slight sway and roll (small angles — it's a flat sprite)
+  // Idle menace: heavy bob, slight sway and roll (small angles — flat sprite)
   const f = S2.frame;
-  oz.position.y = 2 + Math.sin(f * 0.017) * 1.4;
+  oz.position.y = 2 + Math.sin(f * 0.017) * 2.2;
   oz.rotation.y = Math.sin(f * 0.008) * 0.07;
-  oz.rotation.z = Math.sin(f * 0.011) * 0.025;
+  oz.rotation.z = Math.sin(f * 0.011) * 0.03;
+
+  // Throw lunge recovery — ease back to the hold line
+  if (S2.phase === 'boss') {
+    oz.position.z += (OZ_HOLD_Z - oz.position.z) * 0.06;
+  }
+
+  // Arms: throw > chest-beat > gorilla idle sway
+  if (S2.throw) s2UpdateThrow();
+  if (S2.beatT > 0) {
+    // Chest-beat rage after each planted bomb: alternating inboard pumps
+    S2.beatT--;
+    const bt = 40 - S2.beatT;
+    for (const a of S2._arms) {
+      const ph = a.side < 0 ? 0 : Math.PI;
+      a.mesh.rotation.z = -a.side * (0.95 + Math.sin(bt * 0.7 + ph) * 0.35);
+    }
+    if (bt % 9 === 0) { s2Tone(70, 0.12, 'square', 0.16); S2.shake = Math.max(S2.shake, 4); }
+  } else if (S2._arms) {
+    for (const a of S2._arms) {
+      if (S2.throw && S2.throw.arm === a) continue;
+      const ph = a.side < 0 ? 0 : Math.PI * 0.7;
+      const target = a.side * (OZ_ARM.rest + Math.sin(f * 0.03 + ph) * OZ_ARM.sway);
+      a.mesh.rotation.z += (target - a.mesh.rotation.z) * 0.08;
+    }
+  }
 
   // Open sockets pulse (the "shoot me now" tell); planted bombs blink red
   for (const s of S2.sockets) {
