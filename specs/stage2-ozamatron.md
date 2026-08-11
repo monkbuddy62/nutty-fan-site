@@ -14,12 +14,12 @@ This is the second boss and the game's current ending.
 
 ### Trigger and hand-off
 
-- Beating Jake sets `jakeDefeated` and immediately starts a **lazy preload** of
-  `libs/three.min.js` (~600KB), so it downloads during the interlude kills.
-- At **`score === STAGE2_SCORE` (20)** — i.e. 10 gallery kills after Jake — `enterStage2()`
-  (`script.js`) winds the gallery down exactly like `startBoss()` does (slow targets to 15%, clear
-  after 900ms), shows the *STAGE 2 // ENTERING DEEP SPACE* banner, and calls `startStage2()`
-  (`stage2.js`) ~1.1s after the preload resolves.
+- **Stage 2 begins the moment Jake falls.** `startBoss()` kicks off the lazy preload of
+  `libs/three.min.js` (~600KB) so it downloads during the fight; `defeatBoss()` blasts the
+  swallowed photos out of Jake's head and calls `enterStage2()` 1.5s later — there is no
+  gallery intermission.
+- `enterStage2()` (`script.js`) shows the *STAGE 2 // ENTERING DEEP SPACE* banner and calls
+  `startStage2()` (`stage2.js`) ~1.1s after the preload resolves.
 - If `three.min.js` fails to load, the hand-off silently aborts and the gallery continues — a
   broken CDN/cache must never brick the base game.
 - The 2D warp starfield canvas is hidden for the duration; the crosshair overlay and HUD chrome
@@ -116,7 +116,6 @@ All in the config block at the top of `stage2.js`.
 
 | Constant | Value | Controls |
 |---|---|---|
-| `STAGE2_SCORE` (script.js) | 20 | Total kills that trigger the hand-off (10 post-Jake). |
 | `S2_LIVES` | 3 | Ship lives. |
 | `S2_KILLS_TO_BOSS` | 15 | Drone kills before Ozamatron approaches. |
 | `S2_MAX_DRONES` | 8 desktop / 4 mobile | Live drones — same halving discipline as `MAX_ON_SCREEN`. |

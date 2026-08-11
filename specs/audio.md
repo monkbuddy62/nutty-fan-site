@@ -15,7 +15,7 @@ Three `Audio`-element loops, each owned by its phase, never overlapping:
 
 | Track | Plays | Volume | Owned by |
 |---|---|---|---|
-| `audio/gallery-theme.mp3` | Game start, the post-Jake intermission, the post-stage-2 gallery | 0.45 | `startGalleryTheme()` / `stopGalleryTheme()` (`script.js`) |
+| `audio/gallery-theme.mp3` | Game start, after a Jake loss + retry, the post-stage-2 gallery | 0.45 | `startGalleryTheme()` / `stopGalleryTheme()` (`script.js`) |
 | `boss/jake-theme.mp3` | The Jake fight only | 0.55 | [boss-fight.md](boss-fight.md) |
 | `boss/ozamatron-theme.mp3` | Ozamatron approach → third bomb or death | 0.55 | [stage2-ozamatron.md](stage2-ozamatron.md) |
 

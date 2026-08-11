@@ -14,17 +14,22 @@ This is the only fail state in the game.
 `startBoss()` fires from `shootTarget()` when **`score === BOSS_SCORE`** exactly (`script.js:730`).
 An exact equality, not `>=`.
 
-On start: the boss and its HP bar slide in, existing targets are slowed to 15% speed and then
-cleared after 1 second, `spawnTarget()` becomes a no-op for the duration, and the HUD's
-**WPNS / ARMED** cell is repurposed into **LIVES / ♥♥♥**.
+On start: the boss and its HP bar slide in and **Jake inhales the entire gallery** — every live
+photo spirals into his open mouth with accelerating pull, shrinking and spinning, each swallowed
+with a dust puff (a rising suck sound plays, and a two-note gulp when the last one goes down; a
+2.6s safety timer force-swallows stragglers). His mouth is open — and therefore vulnerable —
+during the inhale. `spawnTarget()` becomes a no-op for the duration, and the HUD's
+**WPNS / ARMED** cell is repurposed into **LIVES / ♥♥♥**. `three.min.js` starts preloading here,
+because his defeat now leads directly to stage 2.
 
 ## Theme music
 
 **`boss/jake-theme.mp3`** loops at volume 0.55 for the duration of this fight only. It starts in
 `startBoss()` (which also pauses the gallery theme), stops (and rewinds) on both exits —
-`defeatBoss()` and `endBoss()` — and restarts from the top on a rematch. On victory the gallery
-theme resumes where it left off for the intermission. The mute button pauses/resumes it in place
-rather than restarting. See [audio.md](audio.md) for the full music map.
+`defeatBoss()` and `endBoss()` — and restarts from the top on a rematch. Victory hands off to
+silence, then Ozamatron's theme at the stage-2 approach; only a loss + retry brings the gallery
+theme back. The mute button pauses/resumes it in place rather than restarting. See
+[audio.md](audio.md) for the full music map.
 
 ## Phases
 
@@ -84,11 +89,12 @@ full field of targets staggered 250ms apart.
 ## Victory
 
 At 0 HP, Jake shatters using the same 3×2 image-shatter effect as a normal target
-(`explodeShatter()` reused), all remaining panels are destroyed, and the gallery resumes 1.8
-seconds later with a fresh staggered field.
+(`explodeShatter()` reused), all remaining panels are destroyed, and **the photos he swallowed
+erupt out of his head** — up to 14 random gallery images blast up-and-outward from the head
+position with spin and fade (`burstPhotosFromBoss()`).
 
-Defeat also sets `jakeDefeated` and starts the lazy `three.min.js` preload — 10 gallery kills
-later, stage 2 begins. See [stage2-ozamatron.md](stage2-ozamatron.md).
+There is **no intermission**: 1.5s after the burst, `enterStage2()` fires and the game goes
+straight into deep space. See [stage2-ozamatron.md](stage2-ozamatron.md).
 
 ## Sprites
 

@@ -3,9 +3,9 @@
 Two independent things served from one GitHub Pages site at **pnutsuxnuts.com**:
 
 1. **The shooting gallery** (`/`) — a browser game. Photos and videos of Nutty fly at the screen,
-   you shoot them, Jake the Snake shows up at 10 kills, and 10 kills after beating him the game
-   becomes a 3D on-rails flight ending in the Ozamatron bomb fight. `index.html` + `script.js`
-   (gallery + Jake) + `stage2.js` (3D stage) + `style.css`.
+   you shoot them, Jake the Snake shows up at 10 kills and swallows the gallery; beating him goes
+   straight into a 3D on-rails flight ending in the Ozamatron bomb fight. `index.html` +
+   `script.js` (gallery + Jake) + `stage2.js` (3D stage) + `style.css`.
 2. **The campaign map** (`/dnd-map/`) — a vendored copy of Azgaar's Fantasy Map Generator that
    auto-loads one D&D campaign map.
 

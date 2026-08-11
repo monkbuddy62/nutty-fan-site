@@ -77,8 +77,8 @@ only matters for the panels-vs-boss case: an incoming panel in front of the mout
 
 Score increments, `killStreak` advances, the boom and a random Nutty clip play, and the target
 explodes in place (see [visual-effects.md](visual-effects.md)). At `score === BOSS_SCORE` the boss
-encounter starts; at `score === STAGE2_SCORE` (with Jake already beaten) the game leaves the
-gallery for stage 2 ([stage2-ozamatron.md](stage2-ozamatron.md)).
+encounter starts — and beating it leads directly into stage 2
+([stage2-ozamatron.md](stage2-ozamatron.md)); the gallery only returns after stage 2 is won.
 
 ## Kill streaks
 

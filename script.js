@@ -43,7 +43,6 @@ const streakMessages = {
 
 const TARGET_LIFETIME_MS  = 18000;
 const REMINISCE_IDLE_MS   = 25000;
-const STAGE2_SCORE        = 20;    // 10 kills after Jake falls → stage 2 (stage2.js)
 
 // === STATE ===
 let mediaFiles          = [];
@@ -63,7 +62,6 @@ let VW                  = window.innerWidth;
 let VH                  = window.innerHeight;
 let lastInteractionTime = Date.now();
 let reminiscing         = false;
-let jakeDefeated        = false;     // gates the stage 2 trigger
 let stage2Preload       = null;      // promise for the lazy three.min.js load
 
 // === SHOOT HINT ===
@@ -681,9 +679,6 @@ fetch('media/manifest.json')
     // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the boss
     const fight = new URLSearchParams(location.search).get('fight');
     if ((fight === 'stage2' || fight === 'ozamatron') && window.STAGE2) {
-      jakeDefeated = true;
-      score = STAGE2_SCORE;
-      scoreVal.textContent = String(score).padStart(3, '0');
       STAGE2.skipToBoss = fight === 'ozamatron';
       enterStage2();
       return;
@@ -802,7 +797,6 @@ function shootTarget(target) {
   score++;
   scoreVal.textContent = String(score).padStart(3, '0');
   if (score === BOSS_SCORE && !boss.active) startBoss();
-  if (score === STAGE2_SCORE && jakeDefeated && window.STAGE2 && !STAGE2.done && !STAGE2.active) enterStage2();
 
   const now = Date.now();
   killStreak   = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
@@ -837,6 +831,30 @@ function loop() {
   for (let i = targets.length - 1; i >= 0; i--) {
     const t = targets[i];
     if (t.dead) continue;
+
+    // Jake's entrance: photos spiral into his mouth, shrinking as they go
+    if (boss.sucking) {
+      const m  = bossMouthPoint();
+      const dx = m.x - t.sx, dy = m.y - t.sy;
+      const d  = Math.hypot(dx, dy) || 1;
+      t.suckV  = (t.suckV || 3) * 1.045;              // accelerating pull, ~1.2s total
+      t.sx    += dx / d * Math.min(t.suckV, d);
+      t.sy    += dy / d * Math.min(t.suckV, d);
+      t.rot   += 9;
+      t.scale  = Math.max(0.04, t.scale * 0.955);
+      const shr = t.hRatio || 1;
+      const sdw = t.baseSize * t.scale;
+      t.screenX = t.sx; t.screenY = t.sy;
+      t.w = sdw; t.h = sdw * shr;
+      t.el.style.transform = `translate(${t.sx - BASE_PX / 2}px,${t.sy - BASE_PX * shr / 2}px) scale(${sdw / BASE_PX}) rotate(${t.rot}deg)`;
+      if (d < 45) {                                    // ...gulp
+        t.dead = true;
+        t.el.remove();
+        targets.splice(i, 1);
+        explodeDust(m.x, m.y);
+      }
+      continue;
+    }
 
     // Flee: only compute hypot when cursor is plausibly close (cheap AABB pre-check)
     const fx = mouseX - t.sx;
@@ -896,6 +914,13 @@ function loop() {
     alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
   }
 
+  // Last photo swallowed → gulp, mouth closes
+  if (boss.sucking && targets.length === 0) {
+    boss.sucking = false;
+    playGulp();
+    if (boss.active && boss.state === 'attack') setBossState('idle');
+  }
+
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
 
@@ -932,6 +957,7 @@ const PLAYER_HP_MAX = 3;
 const boss = {
   active: false, hp: BOSS_HP_MAX, phase: 1,
   state: 'idle',   // idle | attack | hit | rage
+  sucking: false,  // entrance: inhaling the gallery
   mouthOpen: false,
   el: null, imgEl: null, hudEl: null,
   attackLoop: null,
@@ -963,6 +989,49 @@ function setBossState(s) {
   boss.state     = s;
   boss.mouthOpen = s === 'attack';
   if (boss.imgEl) boss.imgEl.src = BOSS_DIR + (BOSS_IMGS[s] || 'boss-idle.png');
+}
+
+// Current mouth position in screen px — tracked live while Jake slides in
+function bossMouthPoint() {
+  if (boss.el) {
+    const r = boss.el.getBoundingClientRect();
+    return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.65 };
+  }
+  return { x: VW / 2, y: 150 };
+}
+
+// Rising inhale for the entrance suck
+function playSuck() {
+  if (muted) return;
+  try {
+    const c    = getCtx();
+    const osc  = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(110, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, c.currentTime + 1.4);
+    gain.gain.setValueAtTime(0.09, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.5);
+    osc.start(c.currentTime); osc.stop(c.currentTime + 1.55);
+  } catch (e) {}
+}
+
+function playGulp() {
+  if (muted) return;
+  try {
+    const c = getCtx();
+    for (const [freq, at] of [[300, 0], [180, 0.12]]) {
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.connect(gain); gain.connect(c.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, c.currentTime + at);
+      gain.gain.setValueAtTime(0.16, c.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + at + 0.15);
+      osc.start(c.currentTime + at); osc.stop(c.currentTime + at + 0.17);
+    }
+  } catch (e) {}
 }
 
 function livesStr() {
@@ -1014,12 +1083,20 @@ function startBoss() {
     boss.hudEl.classList.add('visible');
   });
 
-  // Slow then clear existing targets
-  targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
-  setTimeout(() => {
+  // Entrance: Jake inhales the whole gallery — targets spiral into his mouth
+  // (per-frame motion in loop()). Mouth open to eat; state resets on gulp.
+  boss.sucking = true;
+  setBossState('attack');
+  targets.forEach(t => { if (t.fadeTimer) { clearTimeout(t.fadeTimer); t.fadeTimer = null; } });
+  playSuck();
+  setTimeout(() => {   // safety: force-swallow any stragglers
+    if (!boss.sucking) return;
     [...targets].forEach(t => { t.dead = true; t.el.remove(); });
     targets.length = 0;
-  }, 1000);
+  }, 2600);
+
+  // three.min.js loads during the fight — his defeat leads straight to stage 2
+  preloadStage2();
 
   bossLoop();
 }
@@ -1170,10 +1247,8 @@ function damageBoss(amount = 1) {
 
 function defeatBoss() {
   boss.active = false;
-  jakeDefeated = true;
+  boss.sucking = false;
   stopBossTheme();
-  startGalleryTheme();   // intermission music — same track, same spot
-  preloadStage2();   // ~600KB of three.min.js arrives during the interlude kills
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
   boss.panels = [];
@@ -1181,12 +1256,46 @@ function defeatBoss() {
   if (boss.el) {
     const r = boss.el.getBoundingClientRect();
     explodeShatter({ el: boss.imgEl, screenX: r.left + r.width/2, screenY: r.top + r.height/2, w: r.width, h: r.height, rot: 0 });
+    // The photos he swallowed blast back out of his head...
+    burstPhotosFromBoss(r.left + r.width / 2, r.top + r.height * 0.4);
     boss.el.remove();
   }
   boss.hudEl?.remove();
   boss.el = boss.imgEl = boss.hudEl = null;
 
-  setTimeout(() => { for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250); }, 1800);
+  // ...and the game follows them straight into deep space. No intermission —
+  // three.min.js has been loading since the fight began.
+  setTimeout(enterStage2, 1500);
+}
+
+// Defeat spectacle: swallowed photos erupt from Jake's head and scatter
+function burstPhotosFromBoss(cx, cy) {
+  const pics = mediaFiles.filter(f => !/\.(mp4|webm|mov)$/i.test(f));
+  if (!pics.length) return;
+  const n = Math.min(14, pics.length);
+  for (let i = 0; i < n; i++) {
+    const file = pics[Math.floor(Math.random() * pics.length)];
+    const el = document.createElement('div');
+    el.className = 'target';
+    el.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;width:130px;` +
+      `transform:translate(-50%,-50%) scale(0.08) rotate(0deg);opacity:1;pointer-events:none;z-index:210;` +
+      `transition:transform ${1.1 + Math.random() * 0.5}s cubic-bezier(0.16, 0.8, 0.4, 1), opacity 0.45s ease-in ${0.9 + Math.random() * 0.4}s;`;
+    const img = document.createElement('img');
+    img.alt = ''; img.src = MEDIA_DIR + encodeURIComponent(file);
+    el.appendChild(img);
+    document.body.appendChild(el);
+
+    // Up-and-outward hemisphere, like the head popped its cork
+    const ang  = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
+    const dist = 420 + Math.random() * 520;
+    const rot  = (Math.random() - 0.5) * 720;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transform = `translate(${Math.cos(ang) * dist - 65}px, ${Math.sin(ang) * dist - 65}px) scale(${0.8 + Math.random() * 0.5}) rotate(${rot}deg)`;
+      el.style.opacity = '0';
+    }));
+    setTimeout(() => el.remove(), 2100);
+  }
+  playBoom();
 }
 
 function endBoss() {
