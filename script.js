@@ -1527,6 +1527,11 @@ function showStreakPopup(count) {
   const el = document.createElement('div');
   el.className = 'streak-popup';
   el.textContent = msg;
+  // Pop from where the shot landed (just above the crosshair), not mid-screen
+  const px = Math.max(150, Math.min(VW - 150, mouseX > -1000 ? mouseX : VW / 2));
+  const py = Math.max(90,  Math.min(VH - 90, (mouseY > -1000 ? mouseY : VH * 0.45) - 60));
+  el.style.left = px + 'px';
+  el.style.top  = py + 'px';
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1700);
 }

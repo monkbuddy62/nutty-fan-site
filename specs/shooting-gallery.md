@@ -90,7 +90,8 @@ encounter starts — and beating it leads directly into stage 2
 ## Kill streaks
 
 Kills within **1600ms** of each other chain. At 3+ the streak message shows in the top-right HUD
-slot *and* as a large centered popup.
+slot *and* as a large popup that erupts **from the shot point** (60px above the crosshair,
+clamped to the viewport) — not mid-screen.
 
 | Streak | Message |
 |---|---|
