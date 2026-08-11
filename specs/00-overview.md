@@ -13,7 +13,9 @@
 | Path | What it is |
 |---|---|
 | `index.html` | Game shell — canvases, HUD markup, overlays. ~64 lines. |
-| `script.js` | The entire game. ~1100 lines of vanilla ES6, no modules. |
+| `script.js` | The gallery + Jake + stage-2 bridge. Vanilla ES6, no modules. |
+| `stage2.js` | Stage 2: the 3D on-rails flight and Ozamatron. Same conventions. |
+| `libs/` | Vendored `three.min.js` (r140 UMD), lazy-loaded for stage 2 only. |
 | `style.css` | All game styling, including the CRT scanline/vignette treatment. |
 | `media/` | Photo and video targets, plus the committed `manifest.json` index. |
 | `boss/` | Four boss sprites. |
@@ -27,6 +29,7 @@
 |---|---|
 | [shooting-gallery.md](shooting-gallery.md) | The core loop: spawning, motion, fleeing, shooting, streaks, idle mode |
 | [boss-fight.md](boss-fight.md) | The Jake the Snake encounter, its two phases, player lives, game over |
+| [stage2-ozamatron.md](stage2-ozamatron.md) | Stage 2: the 3D on-rails flight and the Ozamatron bomb fight |
 | [hud-and-crosshair.md](hud-and-crosshair.md) | The canvas overlay, crosshair, lock-on brackets, HUD readouts |
 | [visual-effects.md](visual-effects.md) | Explosion styles, warp starfield, screen flashes |
 | [audio.md](audio.md) | Synthesised SFX and the Nutty voice-clip pool |

@@ -43,6 +43,7 @@ const streakMessages = {
 
 const TARGET_LIFETIME_MS  = 18000;
 const REMINISCE_IDLE_MS   = 25000;
+const STAGE2_SCORE        = 20;    // 10 kills after Jake falls → stage 2 (stage2.js)
 
 // === STATE ===
 let mediaFiles          = [];
@@ -62,6 +63,8 @@ let VW                  = window.innerWidth;
 let VH                  = window.innerHeight;
 let lastInteractionTime = Date.now();
 let reminiscing         = false;
+let jakeDefeated        = false;     // gates the stage 2 trigger
+let stage2Preload       = null;      // promise for the lazy three.min.js load
 
 // === SHOOT HINT ===
 function showShootHint() {
@@ -530,6 +533,9 @@ function fireShot() {
   playPew();
   shootFlash = { x: mouseX, y: mouseY, t: Date.now() };
 
+  // Stage 2 owns the whole shot (screen-space projection into the 3D scene)
+  if (window.STAGE2 && STAGE2.active) { stage2Fire(); return; }
+
   // Boss panel hit
   for (let i = boss.panels.length - 1; i >= 0; i--) {
     const p = boss.panels[i];
@@ -630,7 +636,7 @@ fetch('media/manifest.json')
 
 // === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
-  if (boss.active) return;
+  if (boss.active || (window.STAGE2 && STAGE2.active)) return;
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
   const active = new Set(targets.map(t => t.file));
@@ -728,6 +734,7 @@ function shootTarget(target) {
   score++;
   scoreVal.textContent = String(score).padStart(3, '0');
   if (score === BOSS_SCORE && !boss.active) startBoss();
+  if (score === STAGE2_SCORE && jakeDefeated && window.STAGE2 && !STAGE2.done && !STAGE2.active) enterStage2();
 
   const now = Date.now();
   killStreak   = (now - lastKillTime < 1600) ? killStreak + 1 : 1;
@@ -744,6 +751,16 @@ function shootTarget(target) {
 // === GAME LOOP ===
 function loop() {
   frameCount++;
+
+  // Stage 2 owns the frame: the 3D scene renders instead of warp + targets.
+  // The crosshair overlay stays — same reticle in both worlds.
+  if (window.STAGE2 && STAGE2.active) {
+    stage2Tick();
+    drawHudOverlay();
+    requestAnimationFrame(loop);
+    return;
+  }
+
   drawWarp();
   drawHudOverlay();
 
@@ -1065,6 +1082,8 @@ function damageBoss(amount = 1) {
 
 function defeatBoss() {
   boss.active = false;
+  jakeDefeated = true;
+  preloadStage2();   // ~600KB of three.min.js arrives during the interlude kills
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
   boss.panels = [];
@@ -1087,6 +1106,36 @@ function endBoss() {
   boss.panels = [];
   boss.el?.remove(); boss.hudEl?.remove();
   boss.el = boss.imgEl = boss.hudEl = null;
+}
+
+// === STAGE 2 HANDOFF — deep space begins 10 kills after Jake falls ===
+// The 3D stage itself lives in stage2.js; this is only the bridge out of the
+// gallery. three.min.js is injected lazily so the gallery never pays for it.
+
+function preloadStage2() {
+  if (!stage2Preload) {
+    stage2Preload = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'libs/three.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  return stage2Preload;
+}
+
+function enterStage2() {
+  // Wind the gallery down the same way startBoss does
+  targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
+  setTimeout(() => {
+    [...targets].forEach(t => { if (t.fadeTimer) clearTimeout(t.fadeTimer); t.dead = true; t.el.remove(); });
+    targets.length = 0;
+  }, 900);
+  if (window.s2Banner) s2Banner('STAGE 2 // ENTERING DEEP SPACE');
+  preloadStage2()
+    .then(() => setTimeout(startStage2, 1100))   // let the wind-down play out
+    .catch(() => { /* three.min.js failed to load — stay in the gallery */ });
 }
 
 // === STREAK ===

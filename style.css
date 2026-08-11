@@ -370,6 +370,77 @@ body::after {
   box-shadow: 0 0 10px rgba(255,80,0,0.5);
 }
 
+/* === STAGE 2 === */
+#stage2Canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: none;
+}
+#stage2Canvas.visible { display: block; }
+
+#stage2-banner {
+  position: fixed;
+  top: 38%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: 'Courier New', monospace;
+  font-size: 2rem;
+  font-weight: bold;
+  letter-spacing: 0.3em;
+  color: #00ffcc;
+  text-shadow: 0 0 24px rgba(0,255,200,0.9), 0 0 70px rgba(0,255,200,0.4);
+  pointer-events: none;
+  z-index: 160;
+  opacity: 0;
+  transition: opacity 0.7s ease;
+  white-space: nowrap;
+}
+#stage2-banner.visible { opacity: 1; }
+
+/* Ozamatron bomb indicator — lives inside the reused #boss-hud */
+#oz-bombs {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+.oz-slot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,255,130,0.6);
+  background: transparent;
+  box-shadow: 0 0 8px rgba(0,255,130,0.35);
+}
+.oz-slot.planted {
+  border-color: #ff3300;
+  background: radial-gradient(circle, #ff5500 30%, #881100 100%);
+  box-shadow: 0 0 12px rgba(255,60,0,0.9);
+  animation: blink 0.8s infinite;
+}
+
+/* Victory overlay — reuses the gameover layout with the hero palette */
+#victoryScreen {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.88);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: goFadeIn 0.5s ease forwards;
+}
+/* Doubled selectors: .gameover-* rules sit later in this file and would win otherwise */
+.gameover-title.victory-title {
+  color: #00ffcc;
+  text-shadow: 0 0 30px rgba(0,255,200,0.9), 0 0 70px rgba(0,255,200,0.4);
+}
+.gameover-sub.victory-sub { color: rgba(0,255,200,0.55); }
+
+@media (max-width: 600px) {
+  #stage2-banner { font-size: 1.2rem; }
+}
+
 /* === SHOOT HINT === */
 #shoot-hint {
   position: fixed;

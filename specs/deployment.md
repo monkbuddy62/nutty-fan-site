@@ -22,14 +22,19 @@ is no way to deploy one without the other.
 
 ## Bump the build number
 
-This is the release process. `index.html` carries the version in **three places** that must move
+This is the release process. `index.html` carries the version in **four places** that must move
 together:
 
 | Line | What |
 |---|---|
-| 7 | `<link rel="stylesheet" href="style.css?v=27">` |
-| 53 | `<div id="buildId">build 27</div>` |
-| 62 | `<script src="script.js?v=27"></script>` |
+| 7 | `<link rel="stylesheet" href="style.css?v=28">` |
+| 53 | `<div id="buildId">build 28</div>` |
+| 62 | `<script src="script.js?v=28"></script>` |
+| 63 | `<script src="stage2.js?v=28"></script>` |
+
+`libs/three.min.js` is loaded dynamically by `script.js` **without** a `?v=` — it is a vendored
+immutable file; if it is ever upgraded, rename it (e.g. `three-r150.min.js`) rather than relying
+on cache-busting.
 
 Why it matters:
 
@@ -40,7 +45,7 @@ Why it matters:
 - **`#buildId` is the only way to tell what a device is actually running.** It sits bottom-right in
   dim cyan. When someone says the site is broken, the first question is which build they see.
 
-Bump all three on any change to `script.js` or `style.css`. Half the history is build bumps
+Bump all four on any change to `script.js`, `stage2.js`, or `style.css`. Half the history is build bumps
 (`ba32703` is one for cache-busting alone) — that is the mechanism working, not churn.
 
 `dnd-map/` has its own caching story and does not use this scheme; see
@@ -61,7 +66,7 @@ register on localhost, so local behavior there is cleaner than production.
 
 ## Deploy checklist
 
-1. Build number bumped in all three places, if `script.js` or `style.css` changed.
+1. Build number bumped in all four places, if `script.js`, `stage2.js`, or `style.css` changed.
 2. Spec updated in the same commit, if behavior changed.
 3. `media/manifest.json` regenerated and committed, if media changed
    ([media-pipeline.md](media-pipeline.md)).

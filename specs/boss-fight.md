@@ -76,8 +76,11 @@ full field of targets staggered 250ms apart.
 ## Victory
 
 At 0 HP, Jake shatters using the same 3×2 image-shatter effect as a normal target
-(`explodeShatter()` reused at `script.js:1074`), all remaining panels are destroyed, and the gallery
-resumes 1.8 seconds later with a fresh staggered field.
+(`explodeShatter()` reused), all remaining panels are destroyed, and the gallery resumes 1.8
+seconds later with a fresh staggered field.
+
+Defeat also sets `jakeDefeated` and starts the lazy `three.min.js` preload — 10 gallery kills
+later, stage 2 begins. See [stage2-ozamatron.md](stage2-ozamatron.md).
 
 ## Sprites
 
@@ -121,5 +124,7 @@ they appear to emerge from behind his head (fixed in commit 0566ed9).
   do it.
 - **`restartGame()` does not reset `killStreak` or `lastKillTime`**, so a streak can technically
   carry across a game over. Harmless today; worth deciding if scoring ever matters.
-- **There is only one boss.** `boss` is a single object literal (`script.js:847`), not a roster, and
-  the name is hardcoded into the HUD markup. A second boss would need that generalized first.
+- **The `boss` object is Jake-only, not a roster.** The second boss (Ozamatron,
+  [stage2-ozamatron.md](stage2-ozamatron.md)) was built as its own subsystem in `stage2.js` rather
+  than generalizing this one — reasonable while bosses are this different, but a third boss should
+  force the roster question.
