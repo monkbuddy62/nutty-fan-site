@@ -25,7 +25,7 @@ const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (ac
 const OZ_ATTACK_MS       = 3400;                  // orb volley cadence, shrinks per bomb
 const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
 const OZ_HOLD_Z          = -70;                   // where Ozamatron parks — close and huge
-const OZ_APPROACH_FR     = 300;                   // frames of approach glide (~5s)
+const OZ_APPROACH_FR     = 420;                   // frames of approach glide (~7s)
 const OZ_SPRITE          = 'boss/ozamatron.png';        // keyed billboard art, arms erased
 const OZ_PARTS_SPRITE    = 'boss/ozamatron-parts.png';  // keyed parts sheet (arms + debris)
 const OZ_SIZE            = 55;                    // sprite plane size in world units (square)
@@ -88,7 +88,7 @@ const S2 = {
   phase: 'idle',            // idle | flight | approach | boss | victory | gameover
   frame: 0, kills: 0, lives: S2_LIVES, bombs: 0,
   renderer: null, scene: null, camera: null, cvs: null,
-  ship: null, halfW: 16, halfH: 9, shake: 0,
+  ship: null, halfW: 16, halfH: 9, shake: 0, starSpeed: 0,
   clouds: [], drones: [], asteroids: [], orbs: [],
   oz: null, sockets: [], debris: [],
   throw: null, beatT: 0, _nextArm: 0, _arms: null,
@@ -207,6 +207,7 @@ function startStage2() {
   S2.phase  = 'flight';
   S2.frame  = 0; S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
   S2.lastAsteroid = 0; S2.lastDroneFrame = 0;
+  S2.starSpeed = S2_STAR_SPEED;
 
   // Any gallery target that slipped in while three.min.js loaded
   [...targets].forEach(t => { if (t.fadeTimer) clearTimeout(t.fadeTimer); t.dead = true; t.el.remove(); });
@@ -491,11 +492,20 @@ function s2BeginApproach() {
   S2.phase = 'approach';
   S2.approachFrame = S2.frame;
   s2BuildOz();
-  s2Banner('⚠ OZAMATRON APPROACHES ⚠');
+  s2TvStatic(true);   // he broadcasts static until he locks on
 }
 
 function s2OzArrived() {
   S2.phase = 'boss';
+
+  // Arrival slam: he plants himself, then beats his chest — the static on
+  // his screen resolves into the face when the taunt ends
+  playBoom();
+  s2Tone(48, 0.5, 'sine', 0.22);
+  S2.shake = Math.max(S2.shake, 18);
+  s2Flash('rgba(160,255,220,0.22)');
+  s2Banner('OZAMATRON HAS ARRIVED');
+  S2.beatT = 40;
 
   const hud = document.createElement('div');
   hud.id = 'boss-hud';
@@ -751,6 +761,7 @@ function s2Retry() {
   if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
   S2.phase = 'flight';
   S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
+  S2.starSpeed = S2_STAR_SPEED;
   S2.ship.position.set(0, -S2.halfH, S2_SHIP_Z + 8);
   s2SetLives();
   if (S2._debugBoss) {   // ?fight=ozamatron session — retry straight into the boss
@@ -779,9 +790,9 @@ function stage2Tick() {
   ship.rotation.z = (tx - ship.position.x) * -0.1;
   ship.rotation.x = (ty - ship.position.y) * 0.05;
 
-  // Starfield rush
+  // Starfield rush (slows to a crawl during the boss approach)
   for (const cloud of S2.clouds) {
-    cloud.position.z += S2_STAR_SPEED;
+    cloud.position.z += S2.starSpeed;
     if (cloud.position.z >= 600) cloud.position.z -= 1200;
   }
 
@@ -883,11 +894,35 @@ function stage2Tick() {
 function s2UpdateOz() {
   const oz = S2.oz;
 
-  // Approach glide, eased
+  // Approach: a staged arrival, not just a glide
   if (S2.phase === 'approach') {
-    const t = Math.min(1, (S2.frame - S2.approachFrame) / OZ_APPROACH_FR);
+    const af = S2.frame - S2.approachFrame;
+    const t = Math.min(1, af / OZ_APPROACH_FR);
     const e = 1 - Math.pow(1 - t, 3);
     oz.position.z = S2_SPAWN_Z + (OZ_HOLD_Z - S2_SPAWN_Z) * e;
+
+    // Dropping out of warp — the star rush dies as he closes in
+    S2.starSpeed += (0.5 - S2.starSpeed) * 0.02;
+
+    // Red alert first, then the reveal
+    if (af === 1)   s2Banner('⚠ WARNING ⚠');
+    if (af === 150) s2Banner('OZAMATRON APPROACHES');
+    if (af < 170 && af % 55 === 0) {
+      s2Tone(440, 0.22, 'square', 0.09);
+      setTimeout(() => s2Tone(330, 0.22, 'square', 0.09), 240);   // two-tone klaxon
+    }
+    if (af === 1 || af === 60 || af === 120) s2Flash('rgba(255,30,0,0.14)');
+
+    // His screen is rolling static until he locks on
+    if (S2._staticOn && af % 3 === 0) s2NoiseTexture();
+
+    // Growing rumble: constant low jitter plus heavy approaching thuds
+    S2.shake = Math.max(S2.shake, 1 + t * 3);
+    if (af > OZ_APPROACH_FR * 0.45 && af % 60 === 0) {
+      s2Tone(55, 0.35, 'sine', 0.1 + 0.14 * t);
+      S2.shake = Math.max(S2.shake, 9);
+    }
+
     if (t >= 1) s2OzArrived();
   }
 

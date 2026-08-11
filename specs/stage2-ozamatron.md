@@ -48,8 +48,15 @@ This is the second boss and the game's current ending.
   generated art with the background keyed out (1024² RGBA). The baked-in arms are **erased from
   the body texture** and replaced by two shoulder-pivoted arm planes (bent-arm crops from the
   parts sheet), so the arms genuinely move: gorilla idle sway, wind-up, throws, chest-beats.
-  Glides in from the fog over ~5s, then holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing
-  heavily. Name plate reuses the `#boss-hud` styling with **3 bomb slots** instead of an HP bar.
+  Holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing heavily. Name plate reuses the `#boss-hud`
+  styling with **3 bomb slots** instead of an HP bar.
+- **The approach is a staged arrival** (~7s, `OZ_APPROACH_FR` 420 frames): red-alert edge flashes
+  and a two-tone klaxon under a *⚠ WARNING ⚠* banner, the starfield decays from warp rush to a
+  crawl (dropping out of warp), and he emerges from the fog with his screen broadcasting rolling
+  **static**. A constant low camera rumble grows with proximity, joined by heavy thuds in the
+  back half. On arrival: a slam (boom, 48Hz hit, shake 18, flash, *OZAMATRON HAS ARRIVED*), then
+  a chest-beat taunt — and only when the taunt ends does the static resolve into the face. The
+  first throw follows.
 - **The TV screen plays a face.** A swappable overlay plane (`OZ_SCREEN_RECT`, on the CRT glass)
   shows `boss/ozamatron-face.png` — Ozan's headshot processed for the old-TV vibe (desaturated,
   green-gray phosphor tint, scanlines, vignette, rounded CRT corners). `s2SetTvImage(url)` swaps
@@ -120,7 +127,8 @@ All in the config block at the top of `stage2.js`.
 | `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
 | `OZ_ATTACK_MS` | 3400 × 0.78^bombs | Volley cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
-| `OZ_HOLD_Z` | −85 | Where the robot parks — fills the view without clipping. |
+| `OZ_HOLD_Z` | −70 | Where the robot parks — fills the view without clipping. |
+| `OZ_APPROACH_FR` | 420 frames | Length of the staged arrival (~7s). |
 | `OZ_SIZE` | 55 u | Billboard plane size (square, matches the square art). |
 | `OZ_ANCHORS` | image fractions | Socket positions measured off the art. |
 | `OZ_ARM` | rects + pivots | Arm crops, shoulder pivots, fist release point, sway tuning. |
