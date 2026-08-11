@@ -111,9 +111,11 @@ const OZ_LEG = {
   rectL: [0.208, 0.486, 0.475, 0.999],
   rectR: [0.527, 0.486, 0.794, 0.999],
   size: [14.9, 28.7],
-  pivotL: [0.400, 0.495], pivotR: [0.600, 0.495],
+  pivotL: [0.383, 0.495], pivotR: [0.617, 0.495],   // proper wide stance
   pivotDown: 2.2,
 };
+// What he actually throws: the sheet's accessory fruit, spinning billboards
+const OZ_FRUIT_SPRITES = ['boss/fruit-pineapple.png', 'boss/fruit-strawberry.png'];
 // The TV screen: a swappable overlay plane sitting on the CRT glass.
 // Default face is boss/ozamatron-face.png; s2SetTvImage(url) swaps it, and
 // the screen cuts to static while he chest-beats.
@@ -172,6 +174,7 @@ function s2InitScene() {
   S2._faceTex    = new THREE.TextureLoader().load(OZ_FACE_SPRITE);
   S2._lightTex   = new THREE.TextureLoader().load(OZ_PARTS_LIGHT);
   S2._heavyTex   = new THREE.TextureLoader().load(OZ_PARTS_HEAVY);
+  S2._fruitTex   = OZ_FRUIT_SPRITES.map(p => new THREE.TextureLoader().load(p));
 
   s2BuildStars();
   s2BuildShip();
@@ -1063,18 +1066,22 @@ function s2ReleaseOrbs(arm) {
   if (!S2.oz) return;
   const fist = new THREE.Vector3(-arm.side * OZ_ARM.fist[0], OZ_ARM.fist[1], 0.5);
   arm.mesh.localToWorld(fist);
-  const n = 1 + S2.bombs;   // 1 → 3 orbs per throw as bombs land
+  const n = 1 + S2.bombs;   // 1 → 3 fruit per throw as criticals land
   for (let i = 0; i < n; i++) {
+    // He throws actual fruit: spinning pineapple/strawberry billboards
     const mesh = new THREE.Mesh(
-      new THREE.SphereGeometry(1.0, 10, 8),
-      new THREE.MeshLambertMaterial({ color: 0xff6600, emissive: 0xff4400 })
+      new THREE.PlaneGeometry(2.9, 2.9),
+      new THREE.MeshBasicMaterial({
+        map: S2._fruitTex[Math.floor(Math.random() * S2._fruitTex.length)],
+        transparent: true, alphaTest: 0.02,
+      })
     );
     mesh.position.copy(fist);
     const vel = S2.ship.position.clone().sub(fist).normalize().multiplyScalar(OZ_ORB_SPEED);
     vel.x += (Math.random() - 0.5) * 0.3;
     vel.y += (Math.random() - 0.5) * 0.3;
     S2.scene.add(mesh);
-    S2.orbs.push({ mesh, vel });
+    S2.orbs.push({ mesh, vel, spin: (Math.random() - 0.5) * 0.35 });
   }
   s2Tone(180, 0.18, 'sawtooth', 0.12);
   S2.shake = Math.max(S2.shake, 5);
@@ -1223,10 +1230,11 @@ function stage2Tick() {
     }
   }
 
-  // Orbs home on their launch vector; hit the ship or get culled
+  // Thrown fruit tumbles along its launch vector; hits the ship or is culled
   for (let i = S2.orbs.length - 1; i >= 0; i--) {
     const o = S2.orbs[i];
     o.mesh.position.add(o.vel);
+    if (o.spin) o.mesh.rotation.z += o.spin;
     if (o.mesh.position.distanceTo(ship.position) < 2.4) {
       S2.scene.remove(o.mesh);
       S2.orbs.splice(i, 1);
@@ -1413,14 +1421,24 @@ function s2UpdateOz() {
     }
   }
 
-  // Legs march in place — alternating weight shifts, higher steps on groove
+  // Legs march in place: sharp steps (pow-shaped lift), the lifted leg tucks
+  // slightly inward, hips sway onto the planted side, feet land with a thud
   if (S2._legs) {
+    let sway = 0;
     for (const l of S2._legs) {
       const ph = l.side < 0 ? 0 : Math.PI;
-      const sw = Math.sin(f * 0.05 + ph);
-      l.mesh.rotation.z = sw * (0.03 + groove * 0.05);
-      l.mesh.position.y = l.baseY + Math.max(0, sw) * (0.55 + groove * 1.8);
+      const sw = Math.sin(f * 0.055 + ph);
+      const lift = Math.pow(Math.max(0, sw), 1.7) * (0.7 + groove * 2.2);
+      l.mesh.position.y = l.baseY + lift;
+      l.mesh.rotation.z = -l.side * lift * 0.05;
+      sway += l.side * Math.max(0, -sw);          // planted leg pulls the hips
+      if (l.up && sw < 0.05) {                    // footfall
+        l.up = false;
+        if (groove > 0.25) S2.shake = Math.max(S2.shake, 2);
+      }
+      if (sw > 0.4) l.up = true;
     }
+    oz.position.x = sway * 1.2;
   }
 
   // Vulnerability flash: the component itself lights up while its window is

@@ -92,15 +92,18 @@ This is the second boss. Destroying him no longer ends the game — it hands off
   destruction feedback, and the detonation debris uses the heavy sheet so he comes apart wrecked.
 - **He marches.** The baked legs are erased from the body texture (pelvis armor stays) and
   replaced with hip-pivoted planes (`OZ_LEG`, z −0.2 behind the body so the torso overlaps their
-  tops) that shift weight and step in place, higher with the groove.
+  tops) at a proper wide stance (pivots 0.383/0.617). Steps are pow-sharpened lifts — the lifted
+  leg tucks slightly inward, the hips sway onto the planted side, footfalls thud the camera when
+  the groove is up, and step height scales with the bass.
 - Ozamatron's name plate + slots use `#boss-hud.oz` at `top: 84px` — above his face (Jake keeps
   the original 218px).
 - **Attacks rotate: throw → laser → throw → missiles.** The attack timer walks that cycle at
   `OZ_ATTACK_MS` (× 0.78 per bomb):
   - **Throws, ape-style** (`OZ_THROW`): the arm winds up overhead over 26 frames — **the wind-up
-    is the telegraph** — quivers for 8, then snaps down in 6, releasing orbs **from the fist**
-    mid-snap while the body lunges. Arms alternate. Orbs are shootable; the raised-fist release
-    point is far from every socket (shot priority is projectiles-first).
+    is the telegraph** — quivers for 8, then snaps down in 6, releasing **spinning fruit**
+    (pineapple/strawberry billboards from the sheet's accessory art, `OZ_FRUIT_SPRITES`) from the
+    fist mid-snap while the body lunges. Arms alternate. Fruit is shootable; the raised-fist
+    release point is far from every socket (shot priority is projectiles-first).
   - **Laser bursts**: the sprite flashes warm, then `OZ_LASER_BOLTS` fast bolts fire from the
     screen at `OZ_LASER_SPEED`, one every 6 frames, with muzzle-flash and trail particles. Too
     fast to shoot — dodge only.
