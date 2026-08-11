@@ -225,6 +225,7 @@ muteBtn.addEventListener('click', () => {
   muteBtn.textContent = muted ? '🔇' : '🔊';
   muteBtn.classList.toggle('muted', muted);
   if (muted && currentClip) { currentClip.pause(); currentClip.currentTime = 0; }
+  if (muted && jakeVoice) jakeVoice.pause();
   // Boss themes pause/resume rather than restarting
   if (bossTheme) {
     if (muted) bossTheme.pause();
@@ -991,6 +992,20 @@ function setBossState(s) {
   if (boss.imgEl) boss.imgEl.src = BOSS_DIR + (BOSS_IMGS[s] || 'boss-idle.png');
 }
 
+// === JAKE VOICE LINES — one at a time; story beats preempt hit grunts ===
+let jakeVoice = null;
+
+function playJakeVoice(name, preempt = true) {
+  if (muted) return;
+  if (jakeVoice && !jakeVoice.paused && !jakeVoice.ended) {
+    if (!preempt) return;   // grunts never interrupt a line already playing
+    jakeVoice.pause();
+  }
+  jakeVoice = new Audio(BOSS_DIR + name + '.mp3');
+  jakeVoice.volume = 0.9;
+  jakeVoice.play().catch(() => {});
+}
+
 // Current mouth position in screen px — tracked live while Jake slides in
 function bossMouthPoint() {
   if (boss.el) {
@@ -1088,6 +1103,7 @@ function startBoss() {
   boss.sucking = true;
   setBossState('attack');
   targets.forEach(t => { if (t.fadeTimer) { clearTimeout(t.fadeTimer); t.fadeTimer = null; } });
+  playJakeVoice('jake-eat-you-up');
   playSuck();
   setTimeout(() => {   // safety: force-swallow any stragglers
     if (!boss.sucking) return;
@@ -1224,6 +1240,7 @@ function restartGame() {
 function damageBoss(amount = 1) {
   if (!boss.active) return;
   boss.hp = Math.max(0, boss.hp - amount);
+  playJakeVoice(Math.random() < 0.5 ? 'jake-ow' : 'jake-stop-that', false);
 
   const fill = document.getElementById('boss-hp-fill');
   if (fill) fill.style.width = (boss.hp / BOSS_HP_MAX * 100) + '%';
@@ -1237,6 +1254,7 @@ function damageBoss(amount = 1) {
   // Phase 2 at half HP
   if (boss.phase === 1 && boss.hp <= BOSS_HP_MAX / 2) {
     boss.phase = 2;
+    playJakeVoice('jake-shits-painful');
     clearTimeout(boss.attackLoop);
     setBossState('rage');
     bossLoop();
@@ -1249,6 +1267,7 @@ function defeatBoss() {
   boss.active = false;
   boss.sucking = false;
   stopBossTheme();
+  playJakeVoice('jake-defeat');
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
   boss.panels = [];

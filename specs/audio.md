@@ -19,6 +19,9 @@ Three `Audio`-element loops, each owned by its phase, never overlapping:
 | `boss/jake-theme.mp3` | The Jake fight only | 0.55 | [boss-fight.md](boss-fight.md) |
 | `boss/ozamatron-theme.mp3` | Ozamatron approach → third bomb or death | 0.55 | [stage2-ozamatron.md](stage2-ozamatron.md) |
 
+Jake also has five **voice lines** (entrance, two hit grunts, phase-2, defeat) — see
+[boss-fight.md](boss-fight.md).
+
 The gallery theme **pauses without rewinding** — after Jake it resumes where it left off. The boss
 themes restart from the top each encounter. Any theme's `play()` can be rejected by autoplay
 policy when no trusted gesture has happened yet (page load; the `?fight=` debug warps) — every

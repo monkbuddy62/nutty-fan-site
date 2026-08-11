@@ -96,6 +96,21 @@ position with spin and fade (`burstPhotosFromBoss()`).
 There is **no intermission**: 1.5s after the burst, `enterStage2()` fires and the game goes
 straight into deep space. See [stage2-ozamatron.md](stage2-ozamatron.md).
 
+## Voice lines
+
+Five MP3s in `boss/`, played through `playJakeVoice()` — one line at a time. Story beats
+**preempt** whatever is playing; hit grunts never interrupt anything (so autofire doesn't
+stutter them — a new grunt only starts once the previous line has finished).
+
+| File | When | Preempts? |
+|---|---|---|
+| `jake-eat-you-up.mp3` | Entrance, as the inhale starts | yes |
+| `jake-ow.mp3` / `jake-stop-that.mp3` | Each mouth hit, 50/50 pick | no |
+| `jake-shits-painful.mp3` | The phase-2 flip at half HP | yes |
+| `jake-defeat.mp3` | Death, over the shatter and photo burst | yes |
+
+Mute pauses the current line; lines are momentary so they don't resume on unmute.
+
 ## Sprites
 
 Four PNGs in `boss/`, swapped by setting `img.src`. Rendered at 320px wide with
