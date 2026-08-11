@@ -8,6 +8,7 @@
 // ============================================================================
 
 const S3_TRACK      = 'audio/pnutsuxnuts_mixdown.mp3';
+const S3_SPRITE     = 'boss/patticus.png';    // keyed dance-sprite art (442×720 RGBA)
 const S3_BPM        = 130.7;                  // measured off the mixdown (onset autocorrelation)
 const S3_OFFSET_S   = 0.175;                  // first beat of the track, seconds
 const S3_VOLUME     = 0.7;                    // louder than the boss themes — the song is the point
@@ -112,14 +113,7 @@ function s3BuildDom() {
     <div id="patticus">
       <div class="px-say" id="pxSay"></div>
       <div class="px-bob"><div class="px-fig">
-        <div class="px-cape"></div>
-        <div class="px-arm px-armL"></div>
-        <div class="px-arm px-armR"></div>
-        <div class="px-torso"></div>
-        <div class="px-skirt"></div>
-        <div class="px-leg px-legL"></div>
-        <div class="px-leg px-legR"></div>
-        <div class="px-head"><div class="px-laurel"></div><div class="px-shades"></div></div>
+        <img class="px-sprite" src="${S3_SPRITE}" alt="">
       </div></div>
     </div>
     <div id="dance-combo"></div>

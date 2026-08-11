@@ -3,8 +3,8 @@
 ## What it is
 
 The game's true ending. When the third bomb destroys Ozamatron, the wreckage clears and the
-screen becomes a dance floor: **PATTICUS MAXIMUS**, "Galactic Dance Champion // Undefeated", a
-CSS-built gladiator in a toga, laurel wreath, and shades, dances to the site's own song —
+screen becomes a dance floor: **PATTICUS MAXIMUS**, "Galactic Dance Champion // Undefeated" —
+a furious pipe-chomping leprechaun sprite (`boss/patticus.png`) — dances to the site's own song —
 `audio/pnutsuxnuts_mixdown.mp3` — and the player must match his moves, DDR-style. Arrows rise
 through a 4-lane track toward receptors; hit them on the beat. There is **no fail state**:
 surviving the routine wins the game. When the routine ends Patticus crumples, the victory screen
@@ -50,15 +50,16 @@ rest of the session, even back in the gallery.
   mashing is not punished (mobile-friendly).
 - **Patticus strikes the pose of each arrow the moment it reaches the receptors** (or when the
   player hits it early) — the fiction is that he leads and Pnut matches. Poses are CSS classes
-  (`pose-l/d/u/r`) rotating his arms/legs with ~100ms transitions; his idle bob, cape sway, and
-  the floor color washes all run on `--beat`-derived CSS animation durations.
+  (`pose-l/d/u/r`) applying whole-sprite transforms pivoted at his feet — lean left, mirrored
+  lean right (`scaleX(-1)` jig step), jump-stretch, crouch-squash — with ~120ms transitions;
+  his idle bob and the floor color washes run on `--beat`-derived CSS animation durations.
 - He talks: an intro taunt, mockery after 3 consecutive misses, and escalating panic lines at
   15/30/60 combo. The **CROWD HYPE** meter (starts 50%) rises with hits and falls with misses —
   purely cosmetic pressure; it can't kill you.
 
 ### Victory
 
-When the last note resolves (+1.4s), Patticus crumples (shades knocked askew), a golden flash
+When the last note resolves (+1.4s), Patticus keels over desaturated, a golden flash
 and a four-note fanfare play over a Nutty clip, and the victory screen shows: *PATTICUS MAXIMUS
 OUT-DANCED*, a rating — FLAWLESS FUNK (no GOODs or MISSes) / CERTIFIED GROOVE MACHINE (acc ≥ 90%)
 / FUNKY ENOUGH (≥ 65%) / SLOPPY, BUT THE GALAXY IS SAVED — the PERFECT/GOOD/MISS/combo tally, and
@@ -110,10 +111,15 @@ All in the config block at the top of `stage3.js`.
   above the game layers, **below the HUD (100)** so the mute button stays reachable; the
   victory overlay reuses the `#victoryScreen` / `.gameover-*` styles at z 9999.
 - Per-frame work is transform-only translateY on the live arrows (≤ ~12 elements at peak);
-  everything decorative (bob, cape, washes, disco ball) is CSS animation, opacity/transform
-  only. Judgments, combo text, and meter writes happen on events, not per frame.
-- Patticus is ~10 absolutely-positioned divs; poses only ever touch child transforms, so the
-  scale-down at `max-height: 640px` (applied to `#patticus` itself) composes with them.
+  everything decorative (bob, washes, disco ball) is CSS animation, opacity/transform only.
+  Judgments, combo text, and meter writes happen on events, not per frame.
+- Patticus is a single `<img>` (`boss/patticus.png`, 442×720 RGBA, ~320KB) keyed from the
+  user-supplied `Downloads/dance-sprite.png` the same way as the Ozamatron art: frame bars
+  located by dark-fraction and cropped, white background flood-filled from the borders (interior
+  whites survive), stray blobs pruned to the largest connected component, then trimmed and
+  Lanczos-resized. If the art is replaced, re-run that pipeline rather than hand-cropping.
+  Poses only touch `.px-fig`'s transform, so the scale-down at `max-height: 640px` (applied to
+  `#patticus` itself) composes with them.
 
 ## Open questions
 
