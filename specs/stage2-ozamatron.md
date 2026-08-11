@@ -50,8 +50,16 @@ This is the second boss and the game's current ending.
   parts sheet), so the arms genuinely move: gorilla idle sway, wind-up, throws, chest-beats.
   Glides in from the fog over ~5s, then holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing
   heavily. Name plate reuses the `#boss-hud` styling with **3 bomb slots** instead of an HP bar.
-- Anchor points (sockets, orb muzzles, debris placement) are `OZ_ANCHORS`/`OZ_PARTS` image-fraction
-  coordinates measured off the art — if the art is regenerated, re-measure them.
+- **The TV screen plays a face.** A swappable overlay plane (`OZ_SCREEN_RECT`, on the CRT glass)
+  shows `boss/ozamatron-face.png` — Ozan's headshot processed for the old-TV vibe (desaturated,
+  green-gray phosphor tint, scanlines, vignette, rounded CRT corners). `s2SetTvImage(url)` swaps
+  what's playing mid-fight; during each chest-beat the screen cuts to procedural analog static
+  (a 96×72 `CanvasTexture` of noise, re-rolled every 3 frames) and restores after.
+- Anchor points (sockets, debris placement) are `OZ_ANCHORS`/`OZ_PARTS` image-fraction
+  coordinates. Part crop rects are **exact component bounding boxes**, auto-measured by
+  flood-labeling the sheet; the sheet itself now contains only the nine used parts (all strays —
+  bent arms, foot, treads, fruit icons, labels — are erased). If the art is regenerated, re-run
+  that measurement rather than eyeballing rects.
 - **Bomb sockets ×3** — the two watermelon shoulder discs and the CRT screen itself, each with a
   3D ring+core marker floating just in front of the art. One at a time opens for
   `OZ_SOCKET_OPEN_MS` (glows green, pulses), then everything closes for `OZ_SOCKET_GAP_MS` before
@@ -116,6 +124,8 @@ All in the config block at the top of `stage2.js`.
 | `OZ_ARM` | rects + pivots | Arm crops, shoulder pivots, fist release point, sway tuning. |
 | `OZ_THROW` | 26/8/6/40 frames | Windup / hold / snap / recover; windup 2.4 rad overhead. |
 | `OZ_PARTS` | 9 uv rects | Parts-sheet crops + body anchors for the detonation debris. |
+| `OZ_SCREEN_RECT` | [0.359, 0.156, 0.645, 0.371] | The CRT glass on the body sprite — face overlay plane. |
+| `OZ_FACE_SPRITE` | `boss/ozamatron-face.png` | Default screen content (512×384, CRT-processed headshot). |
 
 ### Debug warp
 

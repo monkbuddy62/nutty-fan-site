@@ -18,7 +18,7 @@
 | `libs/` | Vendored `three.min.js` (r140 UMD), lazy-loaded for stage 2 only. |
 | `style.css` | All game styling, including the CRT scanline/vignette treatment. |
 | `media/` | Photo and video targets, plus the committed `manifest.json` index. |
-| `boss/` | Jake's four sprites + Ozamatron's billboard and parts-sheet textures. |
+| `boss/` | Jake's four sprites + Ozamatron's billboard, parts-sheet, and TV-face textures. |
 | `audio/` | Referenced by the game but **not present in the repo** — see `audio.md`. |
 | `dnd-map/` | Vendored upstream code. Do not hand-edit; see `dnd-map.md`. |
 | `build-manifest.py`, `convert-heic.sh` | The media ingestion scripts. |

@@ -40,15 +40,16 @@ const OZ_ANCHORS = {
 // wind up and hurl orbs like a gorilla. The baked-in arms were erased from
 // the body texture; these use the bent-arm crops from the parts sheet.
 const OZ_ARM = {
-  // Outer straight-arm crops — clean columns on the sheet edges, no neighbors
-  rectL:  [0.018, 0.344, 0.164, 0.664],
-  rectR:  [0.835, 0.344, 0.981, 0.664],
-  size:   [10.5, 24.5],          // world units — beefy, like the original art
+  // Exact component bounding boxes on the parts sheet (auto-measured; the
+  // sheet now contains ONLY the 9 used parts, all strays erased)
+  rectL:  [0.029, 0.339, 0.161, 0.608],
+  rectR:  [0.838, 0.330, 0.970, 0.608],
+  size:   [11.8, 24.5],          // world units, width from the true aspect
   pivotL: [0.205, 0.350],        // shoulder joints on the body sprite
   pivotR: [0.795, 0.350],
   pivotIn: 0.6,                  // pivot sits this far inboard of the part center
   pivotDown: 2.5,                //  …and this far below its top edge
-  fist:  [0.6, -19],             // orb release point in arm-local units (x mirrored for R)
+  fist:  [0.6, -19.5],           // orb release point in arm-local units (x mirrored for R)
   rest:  0.12,                   // resting outward splay, radians
   sway:  0.10,                   // idle gorilla sway amplitude
 };
@@ -62,16 +63,21 @@ const OZ_THROW = {
 // Detonation debris cut from the parts sheet: uv rect (x→right, y→down),
 // anchor = where the part sits on the standing sprite, size in world units.
 const OZ_PARTS = [
-  { rect: [0.376, 0.054, 0.620, 0.288], anchor: [0.495, 0.270], size: [18.1, 17.4] }, // TV head
-  { rect: [0.630, 0.029, 0.771, 0.127], anchor: [0.500, 0.075], size: [6.1, 4.2] },   // antenna cap
-  { rect: [0.029, 0.073, 0.200, 0.249], anchor: [0.200, 0.335], size: [10.2, 10.4] }, // disc L
-  { rect: [0.791, 0.078, 0.952, 0.254], anchor: [0.800, 0.335], size: [10.2, 10.4] }, // disc R
-  { rect: [0.018, 0.344, 0.164, 0.664], anchor: [0.115, 0.620], size: [10.5, 24.5] }, // arm L
-  { rect: [0.835, 0.344, 0.981, 0.664], anchor: [0.885, 0.620], size: [10.5, 24.5] }, // arm R
-  { rect: [0.391, 0.308, 0.615, 0.505], anchor: [0.500, 0.500], size: [11.9, 10.4] }, // torso core
-  { rect: [0.278, 0.469, 0.488, 0.986], anchor: [0.400, 0.730], size: [11.6, 28.7] }, // leg L
-  { rect: [0.518, 0.469, 0.737, 0.986], anchor: [0.600, 0.730], size: [11.6, 28.7] }, // leg R
+  { rect: [0.385, 0.062, 0.615, 0.282], anchor: [0.495, 0.270], size: [18.3, 17.4] }, // TV head
+  { rect: [0.625, 0.036, 0.759, 0.125], anchor: [0.500, 0.075], size: [6.3, 4.2] },   // antenna cap
+  { rect: [0.042, 0.081, 0.211, 0.252], anchor: [0.200, 0.335], size: [10.3, 10.4] }, // disc L
+  { rect: [0.789, 0.081, 0.957, 0.252], anchor: [0.800, 0.335], size: [10.2, 10.4] }, // disc R
+  { rect: [0.029, 0.339, 0.161, 0.608], anchor: [0.115, 0.620], size: [12.0, 24.5] }, // arm L
+  { rect: [0.838, 0.330, 0.970, 0.608], anchor: [0.885, 0.620], size: [11.6, 24.5] }, // arm R
+  { rect: [0.388, 0.301, 0.612, 0.500], anchor: [0.500, 0.500], size: [11.7, 10.4] }, // torso core
+  { rect: [0.208, 0.486, 0.475, 0.999], anchor: [0.400, 0.730], size: [14.9, 28.7] }, // leg L
+  { rect: [0.527, 0.486, 0.794, 0.999], anchor: [0.600, 0.730], size: [14.9, 28.7] }, // leg R
 ];
+// The TV screen: a swappable overlay plane sitting on the CRT glass.
+// Default face is boss/ozamatron-face.png; s2SetTvImage(url) swaps it, and
+// the screen cuts to static while he chest-beats.
+const OZ_FACE_SPRITE = 'boss/ozamatron-face.png';
+const OZ_SCREEN_RECT = [0.359, 0.156, 0.645, 0.371];   // CRT glass on the body sprite
 
 // === STATE ===
 const S2 = {
@@ -120,6 +126,7 @@ function s2InitScene() {
   // Fetch the boss art during the flight phase, well before it's needed
   S2._ozTex      = new THREE.TextureLoader().load(OZ_SPRITE);
   S2._ozPartsTex = new THREE.TextureLoader().load(OZ_PARTS_SPRITE);
+  S2._faceTex    = new THREE.TextureLoader().load(OZ_FACE_SPRITE);
 
   s2BuildStars();
   s2BuildShip();
@@ -257,6 +264,7 @@ function s2RemoveOz() {
   if (S2.oz) S2.scene.remove(S2.oz);
   S2.oz = null; S2.sockets = [];
   S2._arms = null; S2.throw = null; S2.beatT = 0;
+  S2._faceMat = null; S2._staticOn = false;
 }
 
 // === FLIGHT PHASE — drones to shoot, asteroids to dodge ===
@@ -412,6 +420,15 @@ function s2BuildOz() {
   S2._ozMat = new THREE.MeshBasicMaterial({ map: S2._ozTex, transparent: true, alphaTest: 0.02 });
   oz.add(new THREE.Mesh(new THREE.PlaneGeometry(OZ_SIZE, OZ_SIZE), S2._ozMat));
 
+  // The TV screen overlay — swappable during the fight (s2SetTvImage)
+  const [sx0, sy0, sx1, sy1] = OZ_SCREEN_RECT;
+  const fw = (sx1 - sx0) * OZ_SIZE, fh = (sy1 - sy0) * OZ_SIZE;
+  S2._faceMat = new THREE.MeshBasicMaterial({ map: S2._faceTex, transparent: true });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(fw, fh), S2._faceMat);
+  const [fx, fy] = s2SpriteLocal([(sx0 + sx1) / 2, (sy0 + sy1) / 2]);
+  face.position.set(fx, fy, 0.15);   // on the glass, behind sockets and arms
+  oz.add(face);
+
   // Gorilla arms: shoulder-pivoted planes, animated in s2UpdateOz
   const armMat = new THREE.MeshBasicMaterial({ map: S2._ozPartsTex, transparent: true, alphaTest: 0.02 });
   S2._arms = [-1, 1].map(side => {
@@ -470,6 +487,38 @@ function s2OzArrived() {
   s2AttackLoop();
 }
 
+// === TV SCREEN — swappable face + procedural static ===
+// Swap what's playing on Ozamatron's face mid-fight: s2SetTvImage('path.png')
+function s2SetTvImage(url) {
+  S2._faceTex = new THREE.TextureLoader().load(url);
+  if (S2._faceMat && !S2._staticOn) S2._faceMat.map = S2._faceTex;
+}
+
+function s2NoiseTexture() {
+  if (!S2._noiseCvs) {
+    S2._noiseCvs = document.createElement('canvas');
+    S2._noiseCvs.width = 96; S2._noiseCvs.height = 72;
+    S2._noiseTex = new THREE.CanvasTexture(S2._noiseCvs);
+    S2._noiseTex.magFilter = THREE.NearestFilter;   // chunky analog grain
+  }
+  const ctx = S2._noiseCvs.getContext('2d');
+  const im = ctx.createImageData(96, 72);
+  for (let i = 0; i < im.data.length; i += 4) {
+    const v = Math.random() * 255;
+    im.data[i] = im.data[i + 1] = im.data[i + 2] = v;
+    im.data[i + 3] = 255;
+  }
+  ctx.putImageData(im, 0, 0);
+  S2._noiseTex.needsUpdate = true;
+  return S2._noiseTex;
+}
+
+function s2TvStatic(on) {
+  if (!S2._faceMat) return;
+  S2._staticOn = on;
+  S2._faceMat.map = on ? s2NoiseTexture() : S2._faceTex;
+}
+
 // === SOCKET CYCLE — the timing half of the bomb mechanic ===
 function s2SocketCycle() {
   if (S2.phase !== 'boss') return;
@@ -511,7 +560,8 @@ function s2PlantBomb(s, p) {
   explodeStars(p.x, p.y);
   s2PlantJingle();
   s2Flash('rgba(0,255,130,0.18)');
-  S2.beatT = 40;   // furious chest-beat — throws pause while he rages
+  S2.beatT = 40;     // furious chest-beat — throws pause while he rages
+  s2TvStatic(true);  // the face cuts to static while he loses it
   const slots = document.querySelectorAll('.oz-slot');
   for (let i = 0; i < S2.bombs && i < slots.length; i++) slots[i].classList.add('planted');
 
@@ -549,7 +599,8 @@ function s2Detonate() {
     for (const part of OZ_PARTS) {
       const m = s2PartMesh(part, partsMat);
       const [lx, ly] = s2SpriteLocal(part.anchor);
-      m.position.set(lx, ly, 0.4).applyMatrix4(S2.oz.matrixWorld);
+      // stagger depth so overlapping transparent shards never z-fight
+      m.position.set(lx, ly, 0.4 + S2.debris.length * 0.06).applyMatrix4(S2.oz.matrixWorld);
       S2.scene.add(m);
       S2.debris.push({
         mesh: m,
@@ -846,7 +897,9 @@ function s2UpdateOz() {
       const ph = a.side < 0 ? 0 : Math.PI;
       a.mesh.rotation.z = -a.side * (0.95 + Math.sin(bt * 0.7 + ph) * 0.35);
     }
+    if (bt % 3 === 0) s2NoiseTexture();            // roll the static
     if (bt % 9 === 0) { s2Tone(70, 0.12, 'square', 0.16); S2.shake = Math.max(S2.shake, 4); }
+    if (S2.beatT === 0) s2TvStatic(false);         // signal restored
   } else if (S2._arms) {
     for (const a of S2._arms) {
       if (S2.throw && S2.throw.arm === a) continue;
