@@ -50,6 +50,10 @@ This is the second boss and the game's current ending.
   parts sheet), so the arms genuinely move: gorilla idle sway, wind-up, throws, chest-beats.
   Holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing heavily. Name plate reuses the `#boss-hud`
   styling with **3 bomb slots** instead of an HP bar.
+- **Theme music:** `boss/ozamatron-theme.mp3` loops at volume 0.55 from the first klaxon of the
+  approach until the third bomb detonates (or the player dies). Stopped in `s2Detonate()`,
+  `s2GameOver()`, and `s2Teardown()`; the mute button pauses/resumes it in place via
+  `s2ThemeMute()`. The flight phase has no music — the fight earns it.
 - **The approach is a staged arrival** (~7s, `OZ_APPROACH_FR` 420 frames): red-alert edge flashes
   and a two-tone klaxon under a *⚠ WARNING ⚠* banner, the starfield decays from warp rush to a
   crawl (dropping out of warp), and he emerges from the fog with his screen broadcasting rolling

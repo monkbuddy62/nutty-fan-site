@@ -182,6 +182,12 @@ muteBtn.addEventListener('click', () => {
   muteBtn.textContent = muted ? '🔇' : '🔊';
   muteBtn.classList.toggle('muted', muted);
   if (muted && currentClip) { currentClip.pause(); currentClip.currentTime = 0; }
+  // Boss themes pause/resume rather than restarting
+  if (bossTheme) {
+    if (muted) bossTheme.pause();
+    else if (boss.active) bossTheme.play().catch(() => {});
+  }
+  if (window.s2ThemeMute) s2ThemeMute();
 });
 
 // === EXPLOSION STYLES ===
@@ -884,6 +890,23 @@ const boss = {
 
 let playerHp = PLAYER_HP_MAX;
 
+// === BOSS THEME — Jake's fight music, this fight only ===
+let bossTheme = null;
+
+function startBossTheme() {
+  if (!bossTheme) {
+    bossTheme = new Audio(BOSS_DIR + 'jake-theme.mp3');
+    bossTheme.loop = true;
+    bossTheme.volume = 0.55;
+  }
+  bossTheme.currentTime = 0;
+  if (!muted) bossTheme.play().catch(() => {});
+}
+
+function stopBossTheme() {
+  if (bossTheme) { bossTheme.pause(); bossTheme.currentTime = 0; }
+}
+
 const BOSS_IMGS = { idle: 'boss-idle.png', attack: 'boss-attack.png', hit: 'boss-hit.png', rage: 'boss-rage.png' };
 
 function setBossState(s) {
@@ -932,6 +955,7 @@ function startBoss() {
 
   buildBossDOM();
   setBossState('idle');
+  startBossTheme();
 
   // Slide in from top
   requestAnimationFrame(() => {
@@ -1095,6 +1119,7 @@ function damageBoss(amount = 1) {
 function defeatBoss() {
   boss.active = false;
   jakeDefeated = true;
+  stopBossTheme();
   preloadStage2();   // ~600KB of three.min.js arrives during the interlude kills
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
@@ -1113,6 +1138,7 @@ function defeatBoss() {
 
 function endBoss() {
   boss.active = false;
+  stopBossTheme();
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(p => { p.dead = true; p.el.remove(); });
   boss.panels = [];

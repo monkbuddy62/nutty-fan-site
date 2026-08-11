@@ -254,6 +254,7 @@ function s2ReturnToGallery() {
 // Clears entities + timers + hides the 3D layer. Scene/renderer survive for retries.
 function s2Teardown() {
   S2.active = false;
+  s2StopTheme();
   clearTimeout(S2.socketTimer); S2.socketTimer = null;
   clearTimeout(S2.attackTimer); S2.attackTimer = null;
   [...S2.drones, ...S2.asteroids, ...S2.orbs, ...S2.debris].forEach(o => S2.scene.remove(o.mesh || o));
@@ -493,6 +494,7 @@ function s2BeginApproach() {
   S2.approachFrame = S2.frame;
   s2BuildOz();
   s2TvStatic(true);   // he broadcasts static until he locks on
+  s2StartTheme();
 }
 
 function s2OzArrived() {
@@ -516,6 +518,30 @@ function s2OzArrived() {
   S2.hudEl = hud;
 
   s2AttackLoop();   // first window opens after the first throw
+}
+
+// === THEME — Ozamatron's fight music, from first klaxon to last bomb ===
+let s2Theme = null;
+
+function s2StartTheme() {
+  if (!s2Theme) {
+    s2Theme = new Audio('boss/ozamatron-theme.mp3');
+    s2Theme.loop = true;
+    s2Theme.volume = 0.55;
+  }
+  s2Theme.currentTime = 0;
+  if (!muted) s2Theme.play().catch(() => {});
+}
+
+function s2StopTheme() {
+  if (s2Theme) { s2Theme.pause(); s2Theme.currentTime = 0; }
+}
+
+// Called from the mute button in script.js: pause/resume in place
+function s2ThemeMute() {
+  if (!s2Theme) return;
+  if (muted) s2Theme.pause();
+  else if (S2.active && (S2.phase === 'approach' || S2.phase === 'boss')) s2Theme.play().catch(() => {});
 }
 
 // === TV SCREEN — swappable face + procedural static ===
@@ -599,6 +625,7 @@ function s2PlantBomb(s, p) {
 
 function s2Detonate() {
   S2.phase = 'victory';
+  s2StopTheme();   // the beeps and the blast take it from here
   clearTimeout(S2.socketTimer);
   clearTimeout(S2.attackTimer);
   S2.orbs.forEach(o => S2.scene.remove(o.mesh));
@@ -737,6 +764,7 @@ function s2ShipHit() {
 
 function s2GameOver() {
   S2.phase = 'gameover';
+  s2StopTheme();
   clearTimeout(S2.socketTimer);
   clearTimeout(S2.attackTimer);
   const overlay = document.createElement('div');
