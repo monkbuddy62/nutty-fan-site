@@ -163,6 +163,11 @@ a golden flash, `explosion.mp3`, and a Nutty clip. He mutters his one quiet line
 `SUESS_WIN_HOLD_MS` later, `startStage3()` fires. No victory screen of its own — the reward is the
 next stage.
 
+He must **hold** the death frame for the whole win. The killing slash is still a slash, so it has
+just scheduled the ~110ms flinch-reset (`SUESS._restFrame`, set in `suessSpawnSlash`); `suessWin()`
+clears that timer before setting frame 5, otherwise he stands back up mid-victory. `sClearTimers()`
+does not cover it — `_restFrame` is a raw `setTimeout`, not an `sTimer`.
+
 ## Input (mobile-first)
 
 - **Swipe / drag** anywhere on the stage to slash; scribble to chain. Touch and mouse both chain via

@@ -41,14 +41,19 @@ const OZ_CHIP_HITS       = 6;    // hits to lightly damage a core component (any
 const OZ_COSM_LIGHT      = 5;    // cosmetic part hits → light damage
 const OZ_COSM_HEAVY      = 12;   //  … → heavy damage (visual only)
 const OZ_SIZE            = 55;                    // sprite plane size in world units (square)
-// Bomb sockets: the CRT screen + both watermelon shoulder discs. There are
-// no 3D markers — the component itself flashes while its window is open
-// (discs get an additive glow, the TV face pulses green), and a window opens
-// right after each throw: dodge the fruit, then punish.
+// Bomb sockets: the CRT screen, both watermelon shoulder discs, and the torso
+// core. There are no 3D markers — the component itself flashes while its window
+// is open (discs and torso get an additive glow, the TV face pulses green), and
+// a window opens right after each throw: dodge the fruit, then punish.
+// There must be one socket per bomb: OZ_BOMBS_NEEDED bombs means bombing every
+// socket, and a bombed socket is spent (dmg 2, never window-eligible again), so
+// fewer sockets than bombs makes the fight unwinnable.
+// `part` keys OZ_DMG_RECTS / OZ_PARTS; `size`/`z` place the damage overlay.
 const OZ_SOCKETS = [
-  { kind: 'screen', anchor: [0.495, 0.271] },   // the FRUIT-VISION CRT face
-  { kind: 'discL',  anchor: [0.200, 0.326] },   // watermelon disc, left
-  { kind: 'discR',  anchor: [0.801, 0.326] },   // watermelon disc, right
+  { kind: 'screen', part: 'head',  anchor: [0.495, 0.271], size: [18.3, 17.4], z: 0.1 },  // FRUIT-VISION CRT
+  { kind: 'discL',  part: 'discL', anchor: [0.200, 0.326], size: [10.3, 10.4], z: 0.2 },  // watermelon disc, left
+  { kind: 'discR',  part: 'discR', anchor: [0.801, 0.326], size: [10.3, 10.4], z: 0.2 },  // watermelon disc, right
+  { kind: 'torso',  part: 'torso', anchor: [0.500, 0.500], size: [11.7, 10.4], z: 0.2 },  // the chest core
 ];
 const OZ_FLASH_SIZE = 11;      // disc glow plane size, world units
 // Overlay arms: separate planes pivoted at the shoulders so Ozamatron can
@@ -599,10 +604,10 @@ function s2BuildOz() {
   // Bomb sockets — no markers, just flash state over the art's own circles.
   // dmg: 0 pristine → 1 light (chip it open) → 2 heavy (the critical hit)
   S2.sockets = OZ_SOCKETS.map(def => {
-    const base = { kind: def.kind, open: false, bombed: false, chip: 0, dmg: 0, overlay: null };
-    if (def.kind === 'screen') {
-      return { ...base, part: 'head', size: [18.3, 17.4], z: 0.1, obj: face, mesh: null };
-    }
+    const base = { kind: def.kind, part: def.part, size: def.size, z: def.z,
+                   open: false, bombed: false, chip: 0, dmg: 0, overlay: null };
+    // The screen flashes via the face material itself — no glow plane
+    if (def.kind === 'screen') return { ...base, obj: face, mesh: null };
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(OZ_FLASH_SIZE, OZ_FLASH_SIZE),
       new THREE.MeshBasicMaterial({
@@ -614,14 +619,14 @@ function s2BuildOz() {
     mesh.position.set(x, y, 0.25);
     mesh.visible = false;
     oz.add(mesh);
-    const part = def.kind === 'discL' ? 'discL' : 'discR';
-    return { ...base, part, size: [10.3, 10.4], z: 0.2, obj: mesh, mesh };
+    return { ...base, obj: mesh, mesh };
   });
 
   // Cosmetic components — not part of the win condition, but they dent,
   // scratch, and rust when shot, because shooting a giant robot should count
+  // (the torso is a bomb socket, not a cosmetic — listing it in both would let
+  // shots between OZ_SOCKET_HIT_PX and radPx apply a second, competing overlay)
   S2.cosmetics = [
-    { part: 'torso', anchor: [0.500, 0.500], size: [11.7, 10.4], z: 0.2, radPx: 85, hits: 0, dmg: 0, overlay: null },
     { part: 'armL', ref: S2._arms[0].mesh, off: -10, size: OZ_ARM.size, radPx: 75, hits: 0, dmg: 0 },
     { part: 'armR', ref: S2._arms[1].mesh, off: -10, size: OZ_ARM.size, radPx: 75, hits: 0, dmg: 0 },
     { part: 'legL', ref: S2._legs[0].mesh, off: -14, size: OZ_LEG.size, radPx: 95, hits: 0, dmg: 0 },

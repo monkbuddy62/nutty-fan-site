@@ -201,8 +201,11 @@ function suessBuildDom() {
   root.addEventListener('touchmove', move, { passive: false });
   root.addEventListener('touchend', up);
   root.addEventListener('mousedown', down);
+  // The drag has to keep tracking outside the stage, so these two live on
+  // window — teardown removes them (root's own listeners die with the node).
   window.addEventListener('mousemove', move);
   window.addEventListener('mouseup', up);
+  SUESS._winMove = move; SUESS._winUp = up;
 }
 
 function suessSetFrame(i) {
@@ -653,6 +656,9 @@ function suessWin() {
   SUESS.el.classList.add('suess-defeated');
   SUESS.el.classList.remove('suess-limitbreak');
   if (SUESS.limitBtn) SUESS.limitBtn.classList.remove('ready');
+  // The winning slash just scheduled a flinch-reset ~110ms out; without this it
+  // fires on top of the death pose and he stands back up for the victory hold.
+  clearTimeout(SUESS._restFrame);
   suessSetFrame(SUESS_FRAMES.death);
   const g = suessGuyPoint();
   s2Flash('rgba(255,220,80,0.32)');
@@ -678,6 +684,9 @@ function suessTeardown() {
   suessRestoreWpnsCell();
   clearTimeout(SUESS._restFrame);
   if (SUESS.audio) SUESS.audio.pause();
+  if (SUESS._winMove) window.removeEventListener('mousemove', SUESS._winMove);
+  if (SUESS._winUp)   window.removeEventListener('mouseup', SUESS._winUp);
+  SUESS._winMove = SUESS._winUp = null;
   if (SUESS.el) { SUESS.el.remove(); SUESS.el = null; }
   SUESS.spriteEl = SUESS.hpFill = SUESS.sayEl = SUESS.slashLayer = SUESS.comboEl = SUESS.limitFill = SUESS.limitBtn = null;
   SUESS.drag = null;
