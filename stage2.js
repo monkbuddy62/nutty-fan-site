@@ -16,20 +16,20 @@ const S2_SHIP_Z          = -14;                   // ship plane in front of came
 const S2_STAR_COUNT      = IS_MOBILE ? 300 : 500; // per cloud, 2 clouds leapfrog
 const S2_STAR_SPEED      = 2.6;                   // forward rush, units/frame
 const S2_SHIP_AIM_DROP   = 3.5;                   // ship flies below the aim point, never covers it
-const S2_ASTEROID_MS     = IS_MOBILE ? 2600 : 1800;
+const S2_ASTEROID_MS     = IS_MOBILE ? 2200 : 1500;
 const S2_DRONE_SPAWN_FR  = 30;                    // frames between drone spawn attempts
 
-const OZ_BOMBS_NEEDED    = 3;
-const OZ_SOCKET_OPEN_MS  = IS_MOBILE ? 1900 : 1500; // vulnerability window (timing)
-const OZ_SOCKET_HIT_PX   = 72;                    // tighter than HIT_RADIUS (accuracy)
-const OZ_ATTACK_MS       = 3000;                  // attack cadence, shrinks per bomb
-const OZ_ORB_SPEED       = 1.35;                  // units/frame toward the ship
+const OZ_BOMBS_NEEDED    = 4;
+const OZ_SOCKET_OPEN_MS  = IS_MOBILE ? 1600 : 1250; // vulnerability window (timing) — tighter
+const OZ_SOCKET_HIT_PX   = 66;                    // tighter than HIT_RADIUS (accuracy)
+const OZ_ATTACK_MS       = 2500;                  // attack cadence, shrinks per bomb — faster
+const OZ_ORB_SPEED       = 1.6;                   // units/frame toward the ship
 
-const S2_SHIELD_FR       = 270;                   // shield recharge, frames (~4.5s)
-const OZ_LASER_SPEED     = 4.6;                   // laser bolts — fast, dodge only
-const OZ_LASER_BOLTS     = 3;                     // bolts per burst
-const OZ_MISSILE_SPEED   = 0.95;                  // homing missiles — slow but they follow
-const OZ_MISSILE_TURN    = 0.05;                  // steering lerp per frame
+const S2_SHIELD_FR       = 360;                   // shield recharge, frames (~6s) — slower
+const OZ_LASER_SPEED     = 5.3;                   // laser bolts — fast, dodge only
+const OZ_LASER_BOLTS     = 4;                     // bolts per burst
+const OZ_MISSILE_SPEED   = 1.15;                  // homing missiles — slow but they follow
+const OZ_MISSILE_TURN    = 0.065;                 // steering lerp per frame — tracks harder
 const S2_PARTICLES       = IS_MOBILE ? 70 : 130;  // particle pool (trails, sparks, bursts)
 const OZ_HOLD_Z          = -70;                   // where Ozamatron parks — close and huge
 const OZ_APPROACH_FR     = 420;                   // frames of approach glide (~7s)
@@ -310,7 +310,7 @@ function startStage2() {
 
   S2.active = true;
   S2.phase  = 'flight';
-  S2.frame  = 0; S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
+  S2.frame  = 0; S2.kills = 0; S2.bombs = 0; S2.lives = window.EASY ? 6 : S2_LIVES;
   S2.lastAsteroid = 0; S2.lastDroneFrame = 0;
   S2.starSpeed = S2_STAR_SPEED;
   S2.shield = true; S2.shieldT = 0; S2._laserQueue = 0;
@@ -701,6 +701,12 @@ function s2BeginApproach() {
 function s2OzArrived() {
   S2.phase = 'boss';
 
+  // You survived the flight — enter the boss fight fresh: lives and shield refill
+  S2.lives = window.EASY ? 6 : S2_LIVES;
+  S2.shield = true; S2.shieldT = 0;
+  if (S2._shieldMesh) S2._shieldMesh.visible = true;
+  s2SetLives();
+
   // Arrival slam: he plants himself, then beats his chest — the static on
   // his screen resolves into the face when the taunt ends
   playBoom();
@@ -714,7 +720,7 @@ function s2OzArrived() {
   hud.id = 'boss-hud';
   hud.className = 'oz';   // sits above his face, not on it
   hud.innerHTML = `<div id="boss-hud-name">OZAMATRON</div>
-    <div id="oz-bombs">${'<span class="oz-slot"></span>'.repeat(OZ_BOMBS_NEEDED)}</div>`;
+    <div id="oz-bombs">${'<span class="oz-slot"></span>'.repeat(window.EASY ? 2 : OZ_BOMBS_NEEDED)}</div>`;
   document.body.appendChild(hud);
   requestAnimationFrame(() => hud.classList.add('visible'));
   S2.hudEl = hud;
@@ -810,7 +816,7 @@ function s2OpenSocketWindow() {
   const s = closed[Math.floor(Math.random() * closed.length)];
   s2SetSocketOpen(s, true);
   clearTimeout(S2.socketTimer);
-  S2.socketTimer = setTimeout(() => s2SetSocketOpen(s, false), OZ_SOCKET_OPEN_MS);
+  S2.socketTimer = setTimeout(() => s2SetSocketOpen(s, false), OZ_SOCKET_OPEN_MS * (window.EASY ? 2 : 1));
 }
 
 function s2SetSocketOpen(s, open) {
@@ -878,7 +884,7 @@ function s2PlantBomb(s, p) {
   const slots = document.querySelectorAll('.oz-slot');
   for (let i = 0; i < S2.bombs && i < slots.length; i++) slots[i].classList.add('planted');
 
-  if (S2.bombs >= OZ_BOMBS_NEEDED) { s2Detonate(); return; }
+  if (S2.bombs >= (window.EASY ? 2 : OZ_BOMBS_NEEDED)) { s2Detonate(); return; }
 
   // Angrier per bomb: faster volleys (each throw opens the next window)
   clearTimeout(S2.attackTimer);
@@ -931,20 +937,34 @@ function s2Detonate() {
     S2.oz = null; S2.sockets = [];
     if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
 
-    setTimeout(s2VictoryHandoff, 2200);
+    setTimeout(s2WarpOut, 1400);   // fly back into open deep space before the Suess
   }, 1450);
+}
+
+// Ozamatron's wreckage behind us, the ship punches back into warp — a short
+// deep-space beat — then the Suess encounter begins.
+function s2WarpOut() {
+  if (!S2.active) { s2VictoryHandoff(); return; }
+  S2.phase = 'warpout';
+  s2Banner('RETURNING TO DEEP SPACE');
+  [0, 130, 260, 400].forEach((g, i) => setTimeout(() => s2Tone(300 + i * 190, 0.18, 'sawtooth', 0.06), g));
+  setTimeout(() => { if (S2.phase === 'warpout') s2Banner('SENSORS // ONE LIFEFORM INBOUND'); }, 1800);
+  setTimeout(() => { if (S2.phase === 'warpout') s2VictoryHandoff(); }, 3600);
 }
 
 // Ozamatron down — but the REAL final boss takes the stage: stage 3, the
 // Patticus Maximus dance-off (stage3.js), owns the ending. The old victory
 // screen survives only as a fallback if stage3.js somehow isn't loaded.
 function s2VictoryHandoff() {
-  if (!window.startStage3) { s2ShowVictory(); return; }
+  // Ozamatron's defeat now leads into the Suess duel; the duel's win hands to
+  // the dance-off. Fall back gracefully if a later stage isn't loaded.
+  const next = window.startSuess || window.startStage3;
+  if (!next) { s2ShowVictory(); return; }
   s2Teardown();
   S2.done  = true;
   S2.phase = 'idle';
   s2RestoreWpnsCell();
-  startStage3();
+  next();
 }
 
 function s2ShowVictory() {
@@ -963,7 +983,7 @@ function s2ShowVictory() {
 // === ATTACKS — a rotation: gorilla throws, laser bursts, homing missiles ===
 function s2AttackLoop() {
   if (S2.phase !== 'boss') return;
-  const interval = OZ_ATTACK_MS * Math.pow(0.78, S2.bombs);
+  const interval = OZ_ATTACK_MS * Math.pow(0.78, S2.bombs) * (window.EASY ? 2 : 1);
   S2.attackTimer = setTimeout(() => {
     if (S2.phase !== 'boss') return;
     if (!S2.throw && S2.beatT <= 0) {
@@ -989,7 +1009,7 @@ function s2LaserBurst() {
     S2._ozMat.color.setHex(0xffc0a0);
     setTimeout(() => { if (S2._ozMat && !S2._staticOn) S2._ozMat.color.setHex(0xffffff); }, 240);
   }
-  S2._laserQueue = OZ_LASER_BOLTS;
+  S2._laserQueue = window.EASY ? 2 : OZ_LASER_BOLTS;
 }
 
 function s2FireLaser() {
@@ -1004,7 +1024,7 @@ function s2FireLaser() {
   const vel = S2.ship.position.clone().sub(origin).normalize();
   vel.x += (Math.random() - 0.5) * 0.14;
   vel.y += (Math.random() - 0.5) * 0.14;
-  vel.normalize().multiplyScalar(OZ_LASER_SPEED);
+  vel.normalize().multiplyScalar(OZ_LASER_SPEED * (window.EASY ? 0.6 : 1));
   mesh.lookAt(origin.clone().add(vel));   // align the bolt with its path
   S2.scene.add(mesh);
   S2.lasers.push({ mesh, vel });
@@ -1025,7 +1045,7 @@ function s2LaunchMissiles() {
     body.position.copy(origin);
     S2.scene.add(body);
     // Kick outward first, then the homing steers them back in
-    const vel = new THREE.Vector3(side * 0.9, 0.35, 0.25).normalize().multiplyScalar(OZ_MISSILE_SPEED);
+    const vel = new THREE.Vector3(side * 0.9, 0.35, 0.25).normalize().multiplyScalar(OZ_MISSILE_SPEED * (window.EASY ? 0.6 : 1));
     S2.missiles.push({ mesh: body, vel });
   }
   s2Tone(95, 0.4, 'sawtooth', 0.13);
@@ -1078,7 +1098,7 @@ function s2ReleaseOrbs(arm) {
       })
     );
     mesh.position.copy(fist);
-    const vel = S2.ship.position.clone().sub(fist).normalize().multiplyScalar(OZ_ORB_SPEED);
+    const vel = S2.ship.position.clone().sub(fist).normalize().multiplyScalar(OZ_ORB_SPEED * (window.EASY ? 0.55 : 1));
     vel.x += (Math.random() - 0.5) * 0.3;
     vel.y += (Math.random() - 0.5) * 0.3;
     S2.scene.add(mesh);
@@ -1133,13 +1153,16 @@ function s2GameOver() {
       <div class="gameover-title">GAME OVER</div>
       <div class="gameover-sub">OZAMATRON PREVAILS — THE GALAXY IS LOST</div>
       <button class="gameover-btn" id="s2RetryBtn">[ RETRY ]</button>
+      ${window.easyBtnHtml ? easyBtnHtml() : ''}
     </div>`;
   document.body.appendChild(overlay);
-  document.getElementById('s2RetryBtn').addEventListener('click', s2Retry);
+  bindTap(document.getElementById('s2RetryBtn'), s2Retry);
+  if (window.bindEasyBtn) bindEasyBtn(overlay, s2Retry);
 }
 
 // Retry restarts stage 2 from the flight phase; the score carries over.
 function s2Retry() {
+  if (S2.phase !== 'gameover') return;   // guard: touchstart + synthesized click can both fire
   const overlay = document.getElementById('gameOverScreen');
   if (overlay) overlay.remove();
   [...S2.drones, ...S2.asteroids, ...S2.orbs, ...S2.lasers, ...S2.missiles].forEach(o => S2.scene.remove(o.mesh));
@@ -1149,7 +1172,7 @@ function s2Retry() {
   s2RemoveOz();
   if (S2.hudEl) { S2.hudEl.remove(); S2.hudEl = null; }
   S2.phase = 'flight';
-  S2.kills = 0; S2.bombs = 0; S2.lives = S2_LIVES;
+  S2.kills = 0; S2.bombs = 0; S2.lives = window.EASY ? 6 : S2_LIVES;
   S2.starSpeed = S2_STAR_SPEED;
   S2.ship.position.set(0, -S2.halfH, S2_SHIP_Z + 8);
   s2SetLives();
@@ -1192,10 +1215,15 @@ function stage2Tick() {
       s2SpawnDrone();
     }
     const now = Date.now();
-    if (now - S2.lastAsteroid > S2_ASTEROID_MS) {
+    if (now - S2.lastAsteroid > S2_ASTEROID_MS * (window.EASY ? 2 : 1)) {
       S2.lastAsteroid = now;
       s2SpawnAsteroid();
     }
+  }
+
+  // Warp-out: punch the star rush back up — flying into open deep space
+  if (S2.phase === 'warpout') {
+    S2.starSpeed += (S2_STAR_SPEED * 2.6 - S2.starSpeed) * 0.05;
   }
 
   // Drones drift toward the camera and are culled behind it
@@ -1279,8 +1307,8 @@ function stage2Tick() {
   // Missiles: home on the ship with limited turn, exhaust trail behind
   for (let i = S2.missiles.length - 1; i >= 0; i--) {
     const m = S2.missiles[i];
-    const want = ship.position.clone().sub(m.mesh.position).normalize().multiplyScalar(OZ_MISSILE_SPEED);
-    m.vel.lerp(want, OZ_MISSILE_TURN);
+    const want = ship.position.clone().sub(m.mesh.position).normalize().multiplyScalar(OZ_MISSILE_SPEED * (window.EASY ? 0.6 : 1));
+    m.vel.lerp(want, OZ_MISSILE_TURN * (window.EASY ? 0.45 : 1));
     m.mesh.position.add(m.vel);
     m.mesh.lookAt(m.mesh.position.clone().add(m.vel));
     m.mesh.rotateX(Math.PI / 2);   // cone nose forward
@@ -1519,8 +1547,11 @@ function s2Tone(freq, dur, type, vol) {
     osc.connect(gain); gain.connect(c.destination);
     osc.type = type;
     osc.frequency.setValueAtTime(freq, c.currentTime);
-    gain.gain.setValueAtTime(vol, c.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+    // Ramp the gain up over ~6ms instead of jumping to full — a hard onset is
+    // the "pop"/click you hear on every tone.
+    gain.gain.setValueAtTime(0.0001, c.currentTime);
+    gain.gain.linearRampToValueAtTime(vol, c.currentTime + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0008, c.currentTime + dur);
     osc.start(c.currentTime); osc.stop(c.currentTime + dur + 0.02);
   } catch (e) {}
 }

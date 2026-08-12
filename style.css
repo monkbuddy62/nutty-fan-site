@@ -570,6 +570,21 @@ body::after {
   box-shadow: 0 0 28px rgba(0,255,200,0.28), inset 0 0 12px rgba(0,255,200,0.08);
 }
 
+/* "Pussy mode" — the easy-out on every death screen */
+.gameover-btn.easy-btn {
+  display: block;
+  margin: 14px auto 0;
+  font-size: 0.92rem;
+  border-color: rgba(255,110,205,0.5);
+  color: #ff86d6;
+  text-shadow: 0 0 10px rgba(255,130,215,0.7);
+  box-shadow: 0 0 15px rgba(255,130,215,0.12), inset 0 0 12px rgba(255,130,215,0.05);
+}
+.gameover-btn.easy-btn:hover {
+  background: rgba(255,130,215,0.12);
+  box-shadow: 0 0 28px rgba(255,130,215,0.3), inset 0 0 12px rgba(255,130,215,0.08);
+}
+
 @media (max-width: 600px) {
   #hud-title { font-size: 0.78rem; }
   #hud-top, #hud-bottom { padding-left: 4rem; padding-right: 4rem; }
@@ -886,4 +901,215 @@ body::after {
   #patticus { transform: scale(0.7); transform-origin: top center; top: 11vh; }
   .disco-ball { font-size: 32px; }
   #dance-hud { top: 46px; }
+}
+
+/* ============================================================================
+   STAGE — THE SUESS (the slash-combo assault). Pure DOM; z-index 90 — above the
+   game layers, below the HUD (100) so the mute button stays reachable.
+   ========================================================================= */
+#suessStage {
+  position: fixed; inset: 0; z-index: 90;
+  opacity: 0; transition: opacity 0.4s ease;
+  font-family: 'Courier New', monospace; overflow: hidden;
+  touch-action: none; -webkit-user-select: none; user-select: none;
+  cursor: crosshair;
+}
+#suessStage.visible { opacity: 1; }
+
+/* --- HP header --- */
+#suess-hud {
+  position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+  width: min(82vw, 480px); text-align: center; pointer-events: none; z-index: 92;
+}
+.suess-name { font-size: 1.5rem; font-weight: bold; letter-spacing: 0.24em; color: #ff5a2a; text-shadow: 0 0 18px rgba(255,90,0,0.8); }
+.suess-sub  { font-size: 0.62rem; letter-spacing: 0.24em; color: rgba(255,120,60,0.6); margin: 3px 0 8px; }
+.suess-hp-track { height: 13px; border: 1px solid rgba(255,90,0,0.5); border-radius: 6px; background: rgba(255,90,0,0.08); overflow: hidden; }
+#suess-hp-fill {
+  height: 100%; width: 100%; transform-origin: left center;
+  background: linear-gradient(90deg, #ff2a2a, #ff9a2a);
+  box-shadow: 0 0 12px rgba(255,90,0,0.7); transition: transform 0.12s ease;
+}
+/* he's clawing life back — bar glows green while regenerating */
+#suess-hud.regen .suess-hp-track { border-color: #47ff8a; box-shadow: 0 0 22px rgba(70,255,140,0.6); }
+#suess-hud.regen #suess-hp-fill { background: linear-gradient(90deg, #22c55e, #7dff9a); box-shadow: 0 0 14px rgba(70,255,140,0.8); }
+
+/* --- the man himself --- */
+#suessGuy { position: fixed; left: 50%; bottom: 20vh; transform: translateX(-50%); z-index: 91; pointer-events: none; text-align: center; transition: opacity 0.16s ease; }
+#suessGuy.suess-gone { opacity: 0; }   /* teleport blink — invisible + untargetable */
+.suess-bob { animation: suess-bob 1.6s ease-in-out infinite; }
+.suess-sprite {
+  height: min(46vh, 420px); aspect-ratio: 453 / 512; margin: 0 auto;
+  background-image: url('boss/suess.png'); background-size: 600% 100%; background-repeat: no-repeat; background-position-x: 0%;
+  image-rendering: pixelated; filter: drop-shadow(0 6px 10px rgba(0,0,0,0.5));
+}
+@keyframes suess-bob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+#suessStage.suess-raging .suess-sprite { filter: drop-shadow(0 0 26px rgba(255,80,0,0.9)) drop-shadow(0 6px 10px rgba(0,0,0,0.5)); }
+#suessStage.suess-limitbreak .suess-sprite { filter: drop-shadow(0 0 40px rgba(255,220,120,1)) brightness(1.3); }
+#suessStage.suess-shake .suess-bob { animation: suess-shake 0.3s linear; }
+@keyframes suess-shake {
+  0%,100% { transform: translate(0,0); } 20% { transform: translate(-7px,2px); }
+  40% { transform: translate(7px,-3px); } 60% { transform: translate(-5px,3px); } 80% { transform: translate(5px,-1px); }
+}
+#suessStage.suess-defeated .suess-sprite { filter: grayscale(0.4) drop-shadow(0 6px 10px rgba(0,0,0,0.5)); }
+
+.suess-say {
+  position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, 6px);
+  min-width: 120px; max-width: 60vw; margin-bottom: 8px;
+  background: rgba(10,10,14,0.9); border: 1px solid rgba(255,120,60,0.6); border-radius: 10px;
+  padding: 8px 14px; font-size: 0.95rem; font-weight: bold; letter-spacing: 0.06em; color: #ffd6a0;
+  white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.suess-say.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* --- slash cuts --- */
+#suess-slashes { position: fixed; inset: 0; z-index: 93; pointer-events: none; contain: layout paint; }
+.slash {
+  position: absolute; width: 340px; height: 12px; border-radius: 12px;
+  background: linear-gradient(90deg, transparent, #fff 30%, #bff6ff 50%, #fff 70%, transparent);
+  box-shadow: 0 0 14px 2px rgba(160,230,255,0.75);   /* single light blur — big shadows tank paint */
+  transform-origin: center; opacity: 0; will-change: transform, opacity;
+  animation: slash-go 0.28s ease-out forwards;
+}
+.slash.slash-alt {
+  background: linear-gradient(90deg, transparent, #fff 30%, #ffd27a 50%, #fff 70%, transparent);
+  box-shadow: 0 0 14px 2px rgba(255,190,110,0.75);
+}
+@keyframes slash-go {
+  0%   { opacity: 0; transform: translate(-50%,-50%) rotate(var(--r,0deg)) scaleX(0.2); }
+  30%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%,-50%) rotate(var(--r,0deg)) scaleX(1.15); }
+}
+
+/* --- crotch orbs (phase 2) --- */
+.suess-orb {
+  position: absolute; width: 42px; height: 42px; border-radius: 50%;
+  transform: translate(-50%,-50%);
+  background: radial-gradient(circle at 40% 35%, #eaffea 0%, #8affa0 35%, #2fd04a 60%, rgba(30,180,60,0.2) 80%);
+  box-shadow: 0 0 16px 4px rgba(90,255,130,0.85), 0 0 30px 8px rgba(50,220,90,0.4);
+  will-change: transform; pointer-events: none;
+  animation: orb-pulse 0.5s ease-in-out infinite;
+}
+@keyframes orb-pulse { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.5); } }
+
+/* --- combo counter --- */
+#suess-combo {
+  position: fixed; top: 16vh; right: 6vw; z-index: 94; text-align: right;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+  text-shadow: 0 0 18px currentColor; line-height: 0.95;
+}
+#suess-combo.visible { opacity: 1; }
+#suess-combo.bump .combo-num { transform: scale(1.25); }
+.combo-num { display: inline-block; font-size: clamp(2.6rem, 11vw, 5rem); font-weight: bold; transition: transform 0.1s ease; }
+.combo-x   { display: block; font-size: 0.8rem; letter-spacing: 0.3em; opacity: 0.85; }
+.combo-mult { display: block; font-size: 1.4rem; font-weight: bold; margin-top: 4px; }
+#suess-combo.tier-1 { color: #9fe6ff; }
+#suess-combo.tier-2 { color: #6cff9a; }
+#suess-combo.tier-3 { color: #ffe14a; }
+#suess-combo.tier-4 { color: #ff9a2a; }
+#suess-combo.tier-5 { color: #ff4a6a; }
+.combo-callout {
+  position: absolute; top: 100%; right: 0; margin-top: 6px; white-space: nowrap;
+  font-size: 1.2rem; font-weight: bold; letter-spacing: 0.14em; color: #fff;
+  text-shadow: 0 0 16px #ff8a3a; animation: callout-go 0.9s ease-out forwards;
+}
+@keyframes callout-go { 0% { opacity: 0; transform: translateY(-8px) scale(0.7); } 25% { opacity: 1; transform: none; } 100% { opacity: 0; transform: translateY(-14px); } }
+
+/* --- COMBO BREAKER banner --- */
+#suess-break {
+  position: fixed; top: 42vh; left: 50%; transform: translateX(-50%); z-index: 97;
+  font-size: clamp(1.6rem, 7vw, 3.4rem); font-weight: bold; letter-spacing: 0.1em; color: #ff2a4a;
+  text-shadow: 0 0 26px rgba(255,40,80,0.9); opacity: 0; pointer-events: none; white-space: nowrap;
+}
+#suess-break.go { animation: break-go 1.1s ease-out; }
+@keyframes break-go {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.5) rotate(-4deg); }
+  15% { opacity: 1; transform: translateX(-50%) scale(1.15) rotate(2deg); }
+  30% { transform: translateX(-50%) scale(1) rotate(-2deg); }
+  80% { opacity: 1; } 100% { opacity: 0; }
+}
+
+/* --- LIMIT gauge --- */
+#suess-limit-wrap {
+  position: fixed; left: 50%; bottom: 4vh; transform: translateX(-50%); z-index: 95;
+  width: min(70vw, 420px); text-align: center; pointer-events: none;
+}
+.suess-limit-lbl { font-size: 0.68rem; letter-spacing: 0.4em; color: rgba(120,200,255,0.8); margin-bottom: 4px; }
+.suess-limit-track {
+  height: 16px; border: 1px solid rgba(120,200,255,0.5); border-radius: 8px;
+  background: rgba(60,120,200,0.12); overflow: hidden;
+}
+#suess-limit-fill {
+  height: 100%; width: 100%; transform-origin: left center; transform: scaleX(0);
+  background: linear-gradient(90deg, #2a6cff, #3ad1ff, #9ff6ff); box-shadow: 0 0 12px rgba(80,200,255,0.7);
+}
+#suess-limit-wrap.full .suess-limit-track { border-color: #ffe14a; box-shadow: 0 0 24px rgba(255,220,60,0.6); animation: limit-full 0.5s ease-in-out infinite; }
+#suess-limit-wrap.full #suess-limit-fill { background: linear-gradient(90deg, #ffd23a, #fff, #ffd23a); }
+@keyframes limit-full { 0%,100% { opacity: 1; } 50% { opacity: 0.65; } }
+
+/* --- LIMIT BREAK button --- */
+#suess-limit {
+  position: fixed; right: 5vw; bottom: calc(4vh + 44px); z-index: 96;
+  width: 116px; height: 116px; border-radius: 50%;
+  background: rgba(20,26,40,0.6); border: 2px solid rgba(120,200,255,0.25); color: rgba(160,210,255,0.35);
+  font-family: 'Courier New', monospace; font-size: 0.82rem; font-weight: bold; letter-spacing: 0.06em; line-height: 1.15;
+  cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; touch-action: none;
+  transition: transform 0.1s, color 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+#suess-limit.ready {
+  color: #fff; border-color: #ffe14a; background: rgba(60,40,10,0.6);
+  box-shadow: 0 0 34px rgba(255,220,60,0.7), inset 0 0 20px rgba(255,220,60,0.25);
+  animation: limit-btn 0.45s ease-in-out infinite;
+}
+#suess-limit.ready:active { transform: scale(0.92); }
+@keyframes limit-btn { 0%,100% { transform: scale(1); } 50% { transform: scale(1.08); } }
+
+/* --- opening hint --- */
+.suess-hint {
+  position: fixed; bottom: calc(4vh + 52px); left: 50%; transform: translateX(-50%); z-index: 94;
+  font-size: 0.72rem; letter-spacing: 0.14em; color: rgba(120,200,255,0.8); text-align: center;
+  opacity: 0; transition: opacity 0.5s; pointer-events: none; white-space: nowrap;
+}
+.suess-hint.visible { opacity: 1; }
+
+/* --- PARRY! / HIT! judgment pop --- */
+#suess-judge {
+  position: fixed; top: 34vh; left: 50%; transform: translateX(-50%); z-index: 97;
+  font-size: clamp(1.6rem, 7vw, 3rem); font-weight: bold; letter-spacing: 0.12em;
+  opacity: 0; pointer-events: none;
+}
+#suess-judge.pop { animation: suess-judge-pop 0.55s ease-out; }
+@keyframes suess-judge-pop {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.6); }
+  25% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  70% { opacity: 1; transform: translateX(-50%) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) scale(1); }
+}
+.j-parry { color: #9ff6ff; text-shadow: 0 0 20px rgba(150,240,255,0.95); }
+.j-hit   { color: #ff3a3a; text-shadow: 0 0 20px rgba(255,60,60,0.95); }
+
+/* --- game over --- */
+#suessGameOver {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  animation: goFadeIn 0.5s ease forwards;
+}
+
+/* --- blinking swipe prompt (nags when idle, screams on his wind-up) --- */
+#suess-prompt {
+  position: fixed; left: 50%; top: 30vh; transform: translateX(-50%); z-index: 94;
+  font-size: clamp(1.1rem, 5vw, 2rem); font-weight: bold; letter-spacing: 0.2em;
+  color: #9ff6ff; text-shadow: 0 0 18px rgba(150,240,255,0.8);
+  opacity: 0; pointer-events: none; white-space: nowrap;
+}
+#suess-prompt.show { animation: suess-blink 0.7s steps(1) infinite; }
+#suess-prompt.urgent { color: #ff5a5a; text-shadow: 0 0 22px rgba(255,70,70,0.95); animation-duration: 0.32s; }
+@keyframes suess-blink { 0%,49% { opacity: 1; } 50%,100% { opacity: 0; } }
+
+@media (max-width: 600px) {
+  .suess-name { font-size: 1.15rem; }
+  #suessGuy { bottom: 22vh; }
+  .suess-sprite { height: min(38vh, 340px); }
+  #suess-combo { top: 14vh; right: 5vw; }
+  #suess-prompt { top: 26vh; }
+  .suess-hint { font-size: 0.58rem; white-space: normal; width: 82vw; }
 }

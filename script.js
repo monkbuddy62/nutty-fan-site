@@ -52,6 +52,9 @@ let score               = 0;
 let killStreak          = 0;
 let lastKillTime        = 0;
 let muted               = false;
+// Difficulty: "pussy mode" — selectable from any death screen, eases every fight
+// for the rest of the run. Shared across script.js / stage2.js / suess.js.
+window.EASY             = false;
 let mouseX              = -9999;
 let mouseY              = -9999;
 let audioCtx            = null;
@@ -233,6 +236,7 @@ function galleryActive() {
   // Once the dance-off has been won (STAGE3.done), the mixdown owns the audio
   // for the rest of the session — the gallery theme never comes back.
   return !boss.active && !(window.STAGE2 && STAGE2.active)
+      && !(window.SUESS && SUESS.active)
       && !(window.STAGE3 && (STAGE3.active || STAGE3.done))
       && !document.getElementById('gameOverScreen');
 }
@@ -264,6 +268,7 @@ muteBtn.addEventListener('click', () => {
   }
   if (window.s2ThemeMute) s2ThemeMute();
   if (window.s3ThemeMute) s3ThemeMute();
+  if (window.suessThemeMute) suessThemeMute();
   if (galleryTheme) {
     if (muted) galleryTheme.pause();
     else if (galleryActive()) galleryTheme.play().catch(() => {});
@@ -765,6 +770,7 @@ document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
   if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
+  if (window.SUESS && SUESS.active) return;     // the duel: dodge/counter buttons only
   touchInteraction();
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
@@ -781,6 +787,7 @@ document.addEventListener('touchstart', e => {
   if (e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
   if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
+  if (window.SUESS && SUESS.active) return;     // the duel: dodge/counter buttons only
   e.preventDefault();
   touchInteraction();
   const t = e.touches[0];
@@ -820,6 +827,10 @@ fetch('media/manifest.json')
     // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the
     // boss, ?fight=dance straight to the Patticus Maximus dance-off
     const fight = new URLSearchParams(location.search).get('fight');
+    if (fight === 'suess' && window.startSuess) {
+      startSuess();
+      return;
+    }
     if (fight === 'dance' && window.startStage3) {
       startStage3();
       return;
@@ -845,7 +856,7 @@ fetch('media/manifest.json')
 
 // === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
-  if (boss.active || (window.STAGE2 && STAGE2.active) || (window.STAGE3 && STAGE3.active)) return;
+  if (boss.active || (window.STAGE2 && STAGE2.active) || (window.STAGE3 && STAGE3.active) || (window.SUESS && SUESS.active)) return;
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
   const active = new Set(targets.map(t => t.file));
@@ -939,10 +950,10 @@ let explosionSfx = null;
 
 function playExplosionSfx() {
   if (muted) return;
-  if (!explosionSfx) {
-    explosionSfx = new Audio(AUDIO_DIR + 'explosion.mp3');
-    explosionSfx.volume = 0.8;
-  }
+  if (!explosionSfx) explosionSfx = new Audio(AUDIO_DIR + 'explosion.mp3');
+  // Quieter in the Suess fight (frequent blasts over the music track); a bit
+  // softer than the old 0.8 everywhere else too.
+  explosionSfx.volume = (window.SUESS && SUESS.active) ? 0.06 : 0.5;
   explosionSfx.currentTime = 0;
   explosionSfx.play().catch(() => {});
 }
@@ -1025,6 +1036,14 @@ function shootTarget(target) {
 // === GAME LOOP ===
 function loop() {
   frameCount++;
+
+  // The Suess duel is pure DOM — starfield behind it, no shooting/crosshair.
+  if (window.SUESS && SUESS.active) {
+    drawWarp();
+    suessTick();
+    requestAnimationFrame(loop);
+    return;
+  }
 
   // Stage 3 (the dance-off) is pure DOM — the warp starfield keeps running
   // behind the dance floor, but shooting and the crosshair are done.
@@ -1153,6 +1172,7 @@ function loop() {
   // Boss panels
   for (let i = boss.panels.length - 1; i >= 0; i--) {
     const p = boss.panels[i];
+    if (!p) continue;                       // array may be emptied mid-loop by a game over
     if (p.dead) { boss.panels.splice(i, 1); continue; }
     p.x += p.vx;
     p.y += p.vy;
@@ -1161,7 +1181,8 @@ function loop() {
     if (p.y > VH + 80) {
       p.el.remove();
       boss.panels.splice(i, 1);
-      hitPlayer();
+      hitPlayer();                          // may be the killing blow → endBoss tears panels down
+      if (!boss.active) break;              // …so stop iterating the (now reset) array
     }
   }
 
@@ -1172,7 +1193,7 @@ function loop() {
 
 const BOSS_DIR      = 'boss/';
 const BOSS_SCORE    = 10;
-const BOSS_HP_MAX   = 20;
+const BOSS_HP_MAX   = 26;
 const PLAYER_HP_MAX = 3;
 
 const boss = {
@@ -1217,12 +1238,14 @@ let jakeVoice = null;
 
 function playJakeVoice(name, preempt = true) {
   if (muted) return;
-  if (jakeVoice && !jakeVoice.paused && !jakeVoice.ended) {
-    if (!preempt) return;   // grunts never interrupt a line already playing
-    jakeVoice.pause();
-  }
-  jakeVoice = new Audio(BOSS_DIR + name + '.mp3');
-  jakeVoice.volume = 0.9;
+  // Reuse ONE audio element — creating a `new Audio()` per line leaks elements
+  // and iOS silently stops playing new ones after ~a couple dozen, which made
+  // Jake go quiet partway through a long fight.
+  if (!jakeVoice) { jakeVoice = new Audio(); jakeVoice.volume = 0.9; }
+  const speaking = !jakeVoice.paused && !jakeVoice.ended && jakeVoice.currentTime > 0;
+  if (speaking && !preempt) return;   // grunts never interrupt a line already playing
+  jakeVoice.src = BOSS_DIR + name + '.mp3';
+  jakeVoice.currentTime = 0;
   jakeVoice.play().catch(() => {});
 }
 
@@ -1305,7 +1328,7 @@ function startBoss() {
   boss.active = true;
   boss.hp     = BOSS_HP_MAX;
   boss.phase  = 1;
-  playerHp    = PLAYER_HP_MAX;
+  playerHp    = window.EASY ? 6 : PLAYER_HP_MAX;
 
   buildBossDOM();
   setBossState('idle');
@@ -1338,7 +1361,7 @@ function startBoss() {
 }
 
 function bossLoop() {
-  const delay = boss.phase === 1 ? 2600 : 1700;
+  const delay = (boss.phase === 1 ? 2200 : 1550) * (window.EASY ? 1.8 : 1);
   boss.attackLoop = setTimeout(() => {
     if (!boss.active) return;
     setBossState('attack');
@@ -1355,17 +1378,18 @@ function firePanels() {
   const r  = boss.el.getBoundingClientRect();
   const ox = r.left + r.width * 0.5;
   const oy = r.top  + r.height * 0.72;   // approximate mouth position
-  const n  = boss.phase === 1 ? 3 : 5;
+  const n  = boss.phase === 1 ? (window.EASY ? 2 : 4) : (window.EASY ? 3 : 5);
 
+  const fall = (boss.phase === 1 ? 2.2 : 3.1) * (window.EASY ? 0.5 : 1);   // rage panels rip out faster
   for (let i = 0; i < n; i++) {
     const spread = n > 1 ? (i / (n - 1) - 0.5) * 4.2 : 0;
-    spawnPanel(ox, oy, spread, 1.8 + Math.random() * 1.0);
+    spawnPanel(ox, oy, spread, fall + Math.random() * (window.EASY ? 0.5 : 1.2));
   }
-  // Phase 2 bonus: one panel aimed at cursor
-  if (boss.phase === 2 && mouseX > 0) {
+  // Phase 2 bonus: one panel aimed at the cursor — can't be dodged by standing still
+  if (boss.phase === 2 && mouseX > 0 && !window.EASY) {
     const dx = mouseX - ox, dy = mouseY - oy;
     const d  = Math.hypot(dx, dy) || 1;
-    spawnPanel(ox, oy, dx / d * 3.5, Math.max(1.5, dy / d * 3.5));
+    spawnPanel(ox, oy, dx / d * 3.8, Math.max(2.0, dy / d * 3.8));
   }
 }
 
@@ -1432,12 +1456,34 @@ function showGameOver() {
       <div class="gameover-title">GAME OVER</div>
       <div class="gameover-sub">JAKE THE SNAKE WINS THIS TIME</div>
       <button class="gameover-btn" id="restartBtn">[ RETRY ]</button>
+      ${easyBtnHtml()}
     </div>`;
   document.body.appendChild(overlay);
-  document.getElementById('restartBtn').addEventListener('click', restartGame);
+  bindTap(document.getElementById('restartBtn'), restartGame);
+  bindEasyBtn(overlay, restartGame);
 }
 
+// Touch-first tap binding — a plain 'click' is unreliable on mobile amid the
+// game's touch/preventDefault handling. Shared by every game-over screen.
+function bindTap(el, fn) {
+  if (!el) return;
+  const go = e => { e.preventDefault(); e.stopPropagation(); fn(); };
+  el.addEventListener('touchstart', go, { passive: false });
+  el.addEventListener('mousedown', go);
+  el.addEventListener('click', go);
+}
+// The "pussy mode" button markup + wiring, shared across the death screens.
+function easyBtnHtml() {
+  return window.EASY ? '' : '<button class="gameover-btn easy-btn" id="easyBtn">[ PUSSY MODE ]</button>';
+}
+function bindEasyBtn(overlay, retryFn) {
+  const b = overlay.querySelector('#easyBtn');
+  if (b) bindTap(b, () => { window.EASY = true; retryFn(); });
+}
+window.bindTap = bindTap; window.easyBtnHtml = easyBtnHtml; window.bindEasyBtn = bindEasyBtn;
+
 function restartGame() {
+  if (!document.getElementById('gameOverScreen')) return;   // guard: touchstart + click can both fire
   const overlay = document.getElementById('gameOverScreen');
   if (overlay) overlay.remove();
 
@@ -1459,7 +1505,7 @@ function restartGame() {
 
 function damageBoss(amount = 1) {
   if (!boss.active) return;
-  boss.hp = Math.max(0, boss.hp - amount);
+  boss.hp = Math.max(0, boss.hp - (window.EASY ? amount * 3 : amount));
   playJakeVoice(Math.random() < 0.5 ? 'jake-ow' : 'jake-stop-that', false);
 
   const fill = document.getElementById('boss-hp-fill');
@@ -1471,9 +1517,13 @@ function damageBoss(amount = 1) {
     if (boss.active) setBossState(boss.phase === 2 ? 'rage' : prev === 'attack' ? 'attack' : 'idle');
   }, 200);
 
-  // Phase 2 at half HP
+  // Phase 2 at half HP — his eyes go red and he heals back to full (not in easy mode)
   if (boss.phase === 1 && boss.hp <= BOSS_HP_MAX / 2) {
     boss.phase = 2;
+    if (!window.EASY) {
+      boss.hp = BOSS_HP_MAX;                                // health bar refills
+      if (fill) fill.style.width = '100%';
+    }
     playJakeVoice('jake-shits-painful');
     clearTimeout(boss.attackLoop);
     setBossState('rage');

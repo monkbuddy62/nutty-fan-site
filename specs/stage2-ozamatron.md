@@ -5,11 +5,12 @@
 Ten kills after Jake the Snake falls, the gallery ends and the game changes shape: the player is
 now piloting a ship through 3D space, on rails, always moving forward. The photos stop — targets
 are 3D models (placeholders for now). At the end of the run a giant robot, **OZAMATRON**, blocks
-the way. He cannot be shot down; the player must **plant 3 bombs** into glowing sockets that only
+the way. He cannot be shot down; the player must **plant 4 bombs** into glowing sockets that only
 open in timed windows — good timing and accuracy, or nothing.
 
-This is the second boss. Destroying him no longer ends the game — it hands off to
-**stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-dance.md)).
+This is the second boss. Destroying him no longer ends the game — after a short warp back into
+deep space it hands off to **the Suess duel** ([stage-suess.md](stage-suess.md)), which in turn
+leads to **stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-dance.md)).
 
 ## Behavior
 
@@ -50,7 +51,7 @@ This is the second boss. Destroying him no longer ends the game — it hands off
   the body texture** and replaced by two shoulder-pivoted arm planes (bent-arm crops from the
   parts sheet), so the arms genuinely move: gorilla idle sway, wind-up, throws, chest-beats.
   Holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing heavily. Name plate reuses the `#boss-hud`
-  styling with **3 bomb slots** instead of an HP bar.
+  styling with **4 bomb slots** instead of an HP bar.
 - **Theme music:** `boss/ozamatron-theme.mp3` loops at volume 0.55 from the first klaxon of the
   approach until the third bomb detonates (or the player dies). Stopped in `s2Detonate()`,
   `s2GameOver()`, and `s2Teardown()`; the mute button pauses/resumes it in place via
@@ -59,9 +60,11 @@ This is the second boss. Destroying him no longer ends the game — it hands off
   and a two-tone klaxon under a *⚠ WARNING ⚠* banner, the starfield decays from warp rush to a
   crawl (dropping out of warp), and he emerges from the fog with his screen broadcasting rolling
   **static**. A constant low camera rumble grows with proximity, joined by heavy thuds in the
-  back half. On arrival: a slam (boom, 48Hz hit, shake 18, flash, *OZAMATRON HAS ARRIVED*), then
-  a chest-beat taunt — and only when the taunt ends does the static resolve into the face. The
-  first throw follows.
+  back half. On arrival (`s2OzArrived`): a slam (boom, 48Hz hit, shake 18, flash, *OZAMATRON HAS
+  ARRIVED*), then a chest-beat taunt — and only when the taunt ends does the static resolve into
+  the face. The first throw follows. **Surviving the flight refills you for the boss:** lives reset
+  to `S2_LIVES` and the shield is restored, so you enter the fight fresh regardless of how battered
+  the flight left you.
 - **The TV screen plays a face.** A swappable overlay plane (`OZ_SCREEN_RECT`, on the CRT glass)
   shows `boss/ozamatron-face.png` — Ozan's headshot processed for the old-TV vibe (desaturated,
   green-gray phosphor tint, scanlines, vignette, rounded CRT corners). `s2SetTvImage(url)` swaps
@@ -83,7 +86,7 @@ This is the second boss. Destroying him no longer ends the game — it hands off
   2. **Only light-damaged components are window-eligible.** A window opens after each throw and
      laser burst (`OZ_SOCKET_OPEN_MS`), the component itself flashing — discs with a pulsing
      additive glow, the TV face pulsing green. No markers.
-  3. **The critical**: a hit within `OZ_SOCKET_HIT_PX` (72px) while flashing → **heavy damage**:
+  3. **The critical**: a hit within `OZ_SOCKET_HIT_PX` (66px) while flashing → **heavy damage**:
      rusted/smashed art, a HUD slot fills, chest-beat rage, attacks speed up (× 0.78) and grow
      (+1 orb). A heavily-damaged screen is a **dead TV** — the face never comes back.
   - A shot on an ineligible/dark component clanks; heavy components smolder red.
@@ -113,7 +116,7 @@ This is the second boss. Destroying him no longer ends the game — it hands off
     missiles — they linger).
 - **The ship has a shield**: a soft additive bubble that tanks exactly one hit from anything
   (orb, laser, missile, asteroid), then shatters in a particle burst and recharges over
-  `S2_SHIELD_FR` (~4.5s) with a two-note chime on restore. HUD shows `⛨` when up, `◌` while
+  `S2_SHIELD_FR` (~6s) with a two-note chime on restore. HUD shows `⛨` when up, `◌` while
   recharging, before the hearts.
 - **Particles**: a pooled system (`S2_PARTICLES` additive glow sprites, 130 desktop / 70 mobile)
   drives missile exhaust, laser trails, muzzle flashes, impact sparks, and the shield break —
@@ -124,7 +127,8 @@ This is the second boss. Destroying him no longer ends the game — it hands off
   (muted, or before the first tap) he falls back to the sine idle.
 - **Chest-beat rage:** each planted bomb triggers a 40-frame alternating chest-beat with low
   thump tones and camera shake; throws pause while he rages.
-- Lives: 3, shown in the same repurposed WPNS→LIVES HUD cell as the Jake fight.
+- Lives: 3, shown in the same repurposed WPNS→LIVES HUD cell as the Jake fight. They **refill to
+  full when Ozamatron arrives** (the flight and the boss fight each get a clean bar of lives).
 
 ### Victory
 
@@ -132,16 +136,23 @@ Third bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white f
 robot comes apart into its **actual body parts** — nine debris planes cut from a second texture
 (`boss/ozamatron-parts.png`, a generated exploded-parts sheet keyed the same way): TV head,
 antenna cap, both shoulder discs, arms, torso core, legs — each flung outward from its true
-position on the body. Once the debris clears (~2.2s), `s2VictoryHandoff()` tears stage 2 down
-(starfield back, WPNS cell restored, `STAGE2.done` set) and hands straight to **stage 3, the
-dance-off** ([stage3-dance.md](stage3-dance.md)) — no intermission. The old *OZAMATRON
-DESTROYED* victory screen (`s2ShowVictory`) survives only as a fallback if `stage3.js` isn't
-loaded; `STAGE2.done` prevents any stage-2 retrigger either way.
+position on the body. About 1.4s after the debris flies, **`s2WarpOut()`** runs a short
+**deep-space beat** (`S2.phase = 'warpout'`): with the wreckage behind you the ship punches the
+star rush back up to warp (`S2.starSpeed` ramps toward `S2_STAR_SPEED × 2.6` in `stage2Tick`),
+a *RETURNING TO DEEP SPACE* → *SENSORS // ONE LIFEFORM INBOUND* banner pair plays over a rising
+warp sting, and ~3.6s later `s2VictoryHandoff()` tears stage 2 down (starfield back, WPNS cell
+restored, `STAGE2.done` set) and hands to **the Suess duel** ([stage-suess.md](stage-suess.md)),
+whose win in turn leads to **stage 3, the dance-off** ([stage3-dance.md](stage3-dance.md)). The
+old *OZAMATRON DESTROYED* victory screen (`s2ShowVictory`) survives only as a fallback if no later
+stage is loaded; `STAGE2.done` prevents any stage-2 retrigger either way.
 
 ### Defeat
 
 Zero lives: `GAME OVER — OZAMATRON PREVAILS`. `[ RETRY ]` restarts stage 2 from the flight phase
-(kills/bombs/lives reset, **score keeps its value** — the run is not reset to the gallery).
+(kills/bombs/lives reset, **score keeps its value** — the run is not reset to the gallery). A
+`[ PUSSY MODE ]` button sits alongside it — the shared difficulty selector
+([00-overview.md](00-overview.md#difficulty)); in easy mode Ozamatron needs only 2 bombs, fires
+slower/fewer, and you get 6 lives.
 
 ## Constants
 
@@ -156,20 +167,20 @@ All in the config block at the top of `stage2.js`.
 | `S2_STAR_COUNT` | 500 / 300 mobile | Points per star cloud (×2 clouds). |
 | `S2_STAR_SPEED` | 2.6 u/frame | On-rails speed feel. |
 | `S2_SHIP_AIM_DROP` | 3.5 u | Ship offset below the crosshair, so it can't block the shot. |
-| `S2_ASTEROID_MS` | 1800 / 2600 mobile | Hazard cadence. |
-| `OZ_BOMBS_NEEDED` | 3 | Bombs to win. |
-| `OZ_SOCKET_OPEN_MS` | 1500 / 1900 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
+| `S2_ASTEROID_MS` | 1500 / 2200 mobile | Hazard cadence. |
+| `OZ_BOMBS_NEEDED` | 4 | Bombs to win. |
+| `OZ_SOCKET_OPEN_MS` | 1250 / 1600 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
 | `OZ_CHIP_HITS` | 6 | Shots to grind a core component to light damage. |
 | `OZ_COSM_LIGHT` / `OZ_COSM_HEAVY` | 5 / 12 | Cosmetic part damage thresholds (visual only). |
 | `OZ_DMG_RECTS` | per-sheet rects | Damage-sheet crops (auto-measured; layouts differ). |
 | `OZ_LEG` | rects + hip pivots | The marching leg planes. |
 | `OZ_FLASH_SIZE` | 11 u | Disc glow plane size. |
-| `OZ_SOCKET_HIT_PX` | 72 | The accuracy requirement, in projected screen px. |
-| `OZ_ATTACK_MS` | 3000 × 0.78^bombs | Attack cadence, angrier per bomb. |
-| `OZ_ORB_SPEED` | 1.35 u/frame | Dodge time per orb. |
-| `S2_SHIELD_FR` | 270 frames (~4.5s) | Shield recharge after a tanked hit. |
-| `OZ_LASER_SPEED` / `OZ_LASER_BOLTS` | 4.6 u/f, 3 | Laser burst — dodge-only pressure. |
-| `OZ_MISSILE_SPEED` / `OZ_MISSILE_TURN` | 0.95 u/f, 0.05 | Homing missiles — slow but persistent. |
+| `OZ_SOCKET_HIT_PX` | 66 | The accuracy requirement, in projected screen px. |
+| `OZ_ATTACK_MS` | 2500 × 0.78^bombs | Attack cadence, angrier per bomb. |
+| `OZ_ORB_SPEED` | 1.6 u/frame | Dodge time per orb. |
+| `S2_SHIELD_FR` | 360 frames (~6s) | Shield recharge after a tanked hit. |
+| `OZ_LASER_SPEED` / `OZ_LASER_BOLTS` | 5.3 u/f, 4 | Laser burst — dodge-only pressure. |
+| `OZ_MISSILE_SPEED` / `OZ_MISSILE_TURN` | 1.15 u/f, 0.065 | Homing missiles — slow but persistent. |
 | `S2_PARTICLES` | 130 / 70 mobile | Particle pool size. |
 | `OZ_HOLD_Z` | −70 | Where the robot parks — fills the view without clipping. |
 | `OZ_APPROACH_FR` | 420 frames | Length of the staged arrival (~7s). |
