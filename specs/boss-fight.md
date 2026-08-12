@@ -33,15 +33,18 @@ theme back. The mute button pauses/resumes it in place rather than restarting. S
 
 ## Phases
 
-There are **two**. Phase 2 begins the moment Jake's HP drops to half or below; the attack timer is
-cancelled and restarted immediately so the faster cadence takes effect without waiting out the
-current delay.
+There are **two**. Phase 2 begins the moment Jake's HP drops to half or below: his eyes go red
+(`boss-rage.png`) and **his HP bar refills to full** (`BOSS_HP_MAX`), so the rage phase is a whole
+second bar of health. The attack timer is cancelled and restarted immediately so the faster cadence
+takes effect without waiting out the current delay.
 
-| | Phase 1 | Phase 2 (HP ≤ 10) |
+| | Phase 1 | Phase 2 (rage) |
 |---|---|---|
-| Panels per volley | 3 | 5 |
-| Volley interval | 2600 ms | 1700 ms |
-| Cursor-aimed panel | — | 1 extra, aimed at the player's cursor |
+| HP on entry | 26 | **refills to 26** |
+| Panels per volley | 4 | 5 |
+| Volley interval | 2200 ms | 1550 ms |
+| Panel fall speed | 2.2–3.4 px/frame | **3.1–4.3** px/frame — faster out of his mouth |
+| Cursor-aimed panels | — | 1 extra, aimed at the player's cursor |
 | Resting sprite | `boss-idle.png` | `boss-rage.png` |
 
 The cursor-aimed panel is what makes phase 2 dangerous: phase 1 can be dodged by standing still,
@@ -53,7 +56,8 @@ Every volley: switch to the `attack` sprite (mouth open), spawn the panels from 
 and return to the resting sprite after 1100ms.
 
 Panels spawn at 50% width / 72% height of the boss element and fan out horizontally across a spread
-of `±2.1` px/frame, falling at `1.8–2.8` px/frame. Each is a 50–90px orange gradient square
+of `±2.1` px/frame, falling at `2.2–3.4` px/frame in phase 1 and a faster `3.1–4.3` in the rage
+phase. Each is a 50–90px orange gradient square
 tumbling at up to `±4.5°` per frame.
 
 A panel that passes 80px below the viewport bottom is removed and **costs the player a life**. A
@@ -65,11 +69,12 @@ panel that is shot is destroyed with a star burst, a boom, and an orange screen 
   `attack` state. The rest of the time Jake is untouchable.
 - Hitbox: centered at 50% width / **65% height** of the boss element, radius `HIT_RADIUS * 1.5`
   (165px). Deliberately larger than the target hitbox, because the mouth is only open for 1100ms
-  out of every 2600.
+  out of every 2200.
 - Note the mouth *hitbox* sits at 65% height while panels *spawn* from 72%. They are separate
   numbers and neither is exactly the sprite's mouth; both are hand-tuned.
 - Each hit deals 1 damage, flashes the `hit` sprite for 200ms, and shrinks the HP bar.
-- `BOSS_HP_MAX` is 20, so the fight is 20 successful mouth shots — roughly 10 per phase.
+- `BOSS_HP_MAX` is 26. Phase 1 takes 13 mouth shots to reach the rage flip; the refill then makes
+  phase 2 a full 26 more — about **39 successful mouth shots** across the whole fight.
 
 **Shot priority:** panels are checked before the mouth (`fireShot()`, `script.js:534`). A panel
 drifting in front of Jake's face absorbs the shot. This is intentional — you have to clear the air
@@ -79,9 +84,18 @@ before you can land damage.
 
 `PLAYER_HP_MAX` is 3, displayed as `♥♥♥` decaying to `♡♡♡` in the repurposed HUD cell. Each life
 lost triggers a red full-screen flash. At zero: the boss is torn down and a **GAME OVER** overlay
-appears 600ms later reading *"JAKE THE SNAKE WINS THIS TIME"* with a `[ RETRY ]` button.
+appears 600ms later reading *"JAKE THE SNAKE WINS THIS TIME"* with a `[ RETRY ]` button and — unless
+already active — a `[ PUSSY MODE ]` button (the shared difficulty selector; see
+[00-overview.md](00-overview.md#difficulty)).
 
 While the game-over screen is up, shooting is disabled.
+
+**Implementation guard (load-bearing):** the killing hit comes from `hitPlayer()` called *inside*
+`loop()`'s panel iteration; that cascade runs `endBoss()`, which reassigns `boss.panels = []`
+mid-loop. The panel loop must therefore skip empty slots (`if (!p) continue;`) and `break` once
+`boss.active` goes false — otherwise it dereferences `undefined`, throws, and the `requestAnimationFrame`
+never fires, freezing the whole screen. (This surfaced once Jake got harder and panel deaths got
+common.)
 
 **RETRY** removes the overlay, resets the score to 0, restores the WPNS/ARMED cell, and respawns a
 full field of targets staggered 250ms apart.
@@ -98,9 +112,12 @@ straight into deep space. See [stage2-ozamatron.md](stage2-ozamatron.md).
 
 ## Voice lines
 
-Five MP3s in `boss/`, played through `playJakeVoice()` — one line at a time. Story beats
-**preempt** whatever is playing; hit grunts never interrupt anything (so autofire doesn't
-stutter them — a new grunt only starts once the previous line has finished).
+Five MP3s in `boss/`, played through `playJakeVoice()` — one line at a time through a **single
+reused `Audio` element** (its `src` is swapped per line). This matters: creating a `new Audio()` per
+line leaks elements, and iOS silently stops playing new ones after ~a couple dozen, which made Jake
+go mute partway through a long fight. Story beats **preempt** whatever is playing; hit grunts never
+interrupt anything (so autofire doesn't stutter them — a new grunt only starts once the previous line
+has finished, detected via `!paused && !ended && currentTime > 0`).
 
 | File | When | Preempts? |
 |---|---|---|
@@ -128,16 +145,16 @@ Four PNGs in `boss/`, swapped by setting `img.src`. Rendered at 320px wide with
 | Constant | Value | Controls |
 |---|---|---|
 | `BOSS_SCORE` | 10 | Kill count that triggers the encounter. |
-| `BOSS_HP_MAX` | 20 | Mouth shots to kill. Phase 2 at 10. |
+| `BOSS_HP_MAX` | 26 | Mouth shots to kill. Phase 2 at 13. |
 | `PLAYER_HP_MAX` | 3 | Lives. |
 | `BOSS_DIR` | `boss/` | Sprite directory. |
-| phase 1 / 2 interval | 2600 / 1700 ms | Volley cadence. |
-| phase 1 / 2 panel count | 3 / 5 | Panels per volley. |
+| phase 1 / 2 interval | 2200 / 1550 ms | Volley cadence. |
+| phase 1 / 2 panel count | 4 / 5 | Panels per volley. |
 | mouth-open window | 1100 ms | Vulnerability window per volley. |
 | weak point | 50% w, 65% h, r = `HIT_RADIUS * 1.5` | Mouth hitbox. |
 | panel origin | 50% w, 72% h | Where panels spawn from. |
 | panel size | 50–90 px | Panel square size. |
-| panel fall speed | 1.8–2.8 px/frame | Time the player has to shoot one. |
+| panel fall speed | 2.2–3.4 (p1) / 3.1–4.3 (p2) px/frame | Time the player has to shoot one. |
 
 ## Layering
 

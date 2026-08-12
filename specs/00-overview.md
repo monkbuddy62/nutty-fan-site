@@ -39,6 +39,27 @@
 | [dnd-map.md](dnd-map.md) | The vendored Fantasy Map Generator and the campaign map |
 | [deployment.md](deployment.md) | Pages, DNS, cache-busting, the build-number ritual |
 
+## Difficulty
+
+There are two difficulties, toggled by a global **`window.EASY`** flag (declared in `script.js`,
+default `false`, shared across `script.js` / `stage2.js` / `suess.js`). Every **GAME OVER** screen —
+Jake, Ozamatron, and the Suess — shows a pink **`[ PUSSY MODE ]`** button next to `[ RETRY ]` (only
+while `EASY` is still off). Tapping it sets `window.EASY = true` and retries that fight; the flag then
+**eases every fight for the rest of the run** (it's never turned back off except by a reload).
+
+Easy mode is applied as inline `window.EASY ? … : …` gates at the relevant use-sites (not a constant
+rewrite), so each spec's constants table lists the **normal** values. What easy mode changes:
+
+- **Jake:** 6 lives (vs 3), each mouth-shot deals 3× damage, no rage refill, 2/3 panels per volley
+  (vs 4/6) at half speed, no cursor-homing panels, volleys 1.8× slower.
+- **Ozamatron:** 6 lives, 2 bombs to win (vs 4), socket window and attack cadence 2× longer, laser/
+  orb/missile speeds ~0.6×, 2 laser bolts (vs 4), missiles turn slower, asteroids half as frequent.
+- **The Suess:** 6 hearts, slashes deal 3× and ignore the rage damage-reduction, no rage full-heal,
+  no self-regen, swings ~1.9× less often that heal for 0, no crotch orbs, no teleport escape.
+
+The button markup/wiring helpers (`easyBtnHtml`, `bindEasyBtn`) and the touch-first `bindTap` live in
+`script.js` and are shared by all three death screens.
+
 ## How these specs work
 
 They are **normative**. A spec states what the system is supposed to do; the code is an attempt at
