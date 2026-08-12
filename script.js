@@ -154,7 +154,7 @@ function playPew() {
         const gain = c.createGain();
         src.buffer = laserBuffers[Math.floor(Math.random() * laserBuffers.length)];
         src.playbackRate.value = 0.94 + Math.random() * 0.12;   // rapid-fire variation
-        gain.gain.value = 0.28;
+        gain.gain.value = 0.16;   // quiet — it fires ~11×/s and must sit under clips/themes
         src.connect(gain); gain.connect(c.destination);
         src.start();
         return;
