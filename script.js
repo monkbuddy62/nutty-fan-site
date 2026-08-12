@@ -43,6 +43,7 @@ const streakMessages = {
 
 const TARGET_LIFETIME_MS  = 18000;
 const REMINISCE_IDLE_MS   = 25000;
+const USE_LASER_SFX       = true;   // laser-1/laser-2 mp3s for shots; false = synth pew
 
 // === STATE ===
 let mediaFiles          = [];
@@ -129,10 +130,36 @@ function getCtx() {
   return audioCtx;
 }
 
+// Recorded laser shots, decoded once into WebAudio buffers so the 90ms
+// autofire can overlap them freely. Until they're ready (or if loading
+// fails, or USE_LASER_SFX is off) the synth pew below still fires.
+let laserBuffers = null;
+let laserLoading = false;
+
+function loadLaserSfx(c) {
+  laserLoading = true;
+  Promise.all(['laser-1.mp3', 'laser-2.mp3'].map(f =>
+    fetch(AUDIO_DIR + f).then(r => r.arrayBuffer()).then(b => c.decodeAudioData(b))
+  )).then(bufs => { laserBuffers = bufs; }).catch(() => {});
+}
+
 function playPew() {
   if (muted) return;
   try {
-    const c    = getCtx();
+    const c = getCtx();
+    if (USE_LASER_SFX) {
+      if (!laserBuffers && !laserLoading) loadLaserSfx(c);
+      if (laserBuffers) {
+        const src  = c.createBufferSource();
+        const gain = c.createGain();
+        src.buffer = laserBuffers[Math.floor(Math.random() * laserBuffers.length)];
+        src.playbackRate.value = 0.94 + Math.random() * 0.12;   // rapid-fire variation
+        gain.gain.value = 0.5;
+        src.connect(gain); gain.connect(c.destination);
+        src.start();
+        return;
+      }
+    }
     const osc  = c.createOscillator();
     const gain = c.createGain();
     osc.connect(gain); gain.connect(c.destination);
@@ -907,6 +934,19 @@ function fadeTarget(t) {
 }
 
 // Meaty through-and-through impact
+// The big one — reserved for boss deaths (Jake's shatter, Ozamatron's blast)
+let explosionSfx = null;
+
+function playExplosionSfx() {
+  if (muted) return;
+  if (!explosionSfx) {
+    explosionSfx = new Audio(AUDIO_DIR + 'explosion.mp3');
+    explosionSfx.volume = 0.8;
+  }
+  explosionSfx.currentTime = 0;
+  explosionSfx.play().catch(() => {});
+}
+
 function playThunk() {
   if (muted) return;
   try {
@@ -1454,6 +1494,7 @@ function defeatBoss() {
 
   if (boss.el) {
     const r = boss.el.getBoundingClientRect();
+    playExplosionSfx();
     explodeShatter({ el: boss.imgEl, screenX: r.left + r.width/2, screenY: r.top + r.height/2, w: r.width, h: r.height, rot: 0 });
     // The photos he swallowed blast back out of his head...
     burstPhotosFromBoss(r.left + r.width / 2, r.top + r.height * 0.4);

@@ -41,10 +41,21 @@ the first shot.
 
 ### `playPew()` — every shot
 
-A sawtooth oscillator swept from `800–960 Hz` down to `130 Hz` over 120ms, with gain falling from
-`0.14` to silence over the same window. The base frequency is randomised per shot; at the 90ms
-autofire rate, a fixed pitch turns into a machine-gun drone, while the jitter keeps it reading as
-distinct shots.
+With `USE_LASER_SFX` on (the default), each shot plays one of two recorded lasers
+(`audio/laser-1.mp3` / `laser-2.mp3`), decoded once into WebAudio buffers so 90ms autofire can
+overlap them freely, at gain 0.5 with ±6% playback-rate jitter for the rapid-fire feel. **To back
+this out, flip `USE_LASER_SFX` to `false`** — the original synth pew below is still the fallback
+(and plays until the buffers finish decoding).
+
+Synth fallback: a sawtooth oscillator swept from `800–960 Hz` down to `130 Hz` over 120ms, with
+gain falling from `0.14` to silence over the same window. The base frequency is randomised per
+shot; at the 90ms autofire rate, a fixed pitch turns into a machine-gun drone, while the jitter
+keeps it reading as distinct shots.
+
+### `playExplosionSfx()` — boss deaths only
+
+`audio/explosion.mp3` at volume 0.8, reserved for the two big moments: Jake's shatter and
+Ozamatron's detonation blast (layered over the synth booms in both cases).
 
 ### `playBoom()` — every kill
 

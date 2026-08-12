@@ -903,6 +903,7 @@ function s2Detonate() {
       const p = s2Project(s.obj.getWorldPosition(S2._pv));
       if (p) explodeStars(p.x, p.y);
     }
+    playExplosionSfx();   // the big one, layered over the booms
     [0, 220, 440].forEach(g => setTimeout(playBoom, g));
     playNuttyClip();
     s2Flash('rgba(255,255,255,0.75)');
