@@ -43,7 +43,7 @@ the first shot.
 
 With `USE_LASER_SFX` on (the default), each shot plays one of two recorded lasers
 (`audio/laser-1.mp3` / `laser-2.mp3`), decoded once into WebAudio buffers so 90ms autofire can
-overlap them freely, at gain 0.5 with ±6% playback-rate jitter for the rapid-fire feel. **To back
+overlap them freely, at gain 0.28 with ±6% playback-rate jitter for the rapid-fire feel. **To back
 this out, flip `USE_LASER_SFX` to `false`** — the original synth pew below is still the fallback
 (and plays until the buffers finish decoding).
 
