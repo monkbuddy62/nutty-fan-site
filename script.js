@@ -1517,6 +1517,10 @@ function damageBoss(amount = 1) {
     if (boss.active) setBossState(boss.phase === 2 ? 'rage' : prev === 'attack' ? 'attack' : 'idle');
   }, 200);
 
+  // Death is checked BEFORE the phase-2 refill — otherwise a blow that crosses
+  // half HP and zero in one go would resurrect him at full health.
+  if (boss.hp <= 0) { defeatBoss(); return; }
+
   // Phase 2 at half HP — his eyes go red and he heals back to full (not in easy mode)
   if (boss.phase === 1 && boss.hp <= BOSS_HP_MAX / 2) {
     boss.phase = 2;
@@ -1529,8 +1533,6 @@ function damageBoss(amount = 1) {
     setBossState('rage');
     bossLoop();
   }
-
-  if (boss.hp <= 0) defeatBoss();
 }
 
 function defeatBoss() {

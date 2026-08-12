@@ -6,7 +6,8 @@ Ten kills after Jake the Snake falls, the gallery ends and the game changes shap
 now piloting a ship through 3D space, on rails, always moving forward. The photos stop — targets
 are 3D models (placeholders for now). At the end of the run a giant robot, **OZAMATRON**, blocks
 the way. He cannot be shot down; the player must **plant 4 bombs** into glowing sockets that only
-open in timed windows — good timing and accuracy, or nothing.
+open in timed windows — good timing and accuracy, or nothing. There are **four sockets and four
+bombs**: winning means bombing every one of them.
 
 This is the second boss. Destroying him no longer ends the game — after a short warp back into
 deep space it hands off to **the Suess duel** ([stage-suess.md](stage-suess.md)), which in turn
@@ -53,7 +54,7 @@ leads to **stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-d
   Holds at `OZ_HOLD_Z` (−70 — close and huge), bobbing heavily. Name plate reuses the `#boss-hud`
   styling with **4 bomb slots** instead of an HP bar.
 - **Theme music:** `boss/ozamatron-theme.mp3` loops at volume 0.55 from the first klaxon of the
-  approach until the third bomb detonates (or the player dies). Stopped in `s2Detonate()`,
+  approach until the final bomb detonates (or the player dies). Stopped in `s2Detonate()`,
   `s2GameOver()`, and `s2Teardown()`; the mute button pauses/resumes it in place via
   `s2ThemeMute()`. The flight phase has no music — the fight earns it.
 - **The approach is a staged arrival** (~7s, `OZ_APPROACH_FR` 420 frames): red-alert edge flashes
@@ -75,8 +76,14 @@ leads to **stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-d
   flood-labeling the sheet; the sheet itself now contains only the nine used parts (all strays —
   bent arms, foot, treads, fruit icons, labels — are erased). If the art is regenerated, re-run
   that measurement rather than eyeballing rects.
-- **Three-stage component damage** replaces the old plant-a-bomb rule. The three core components
-  (the two watermelon shoulder discs and the CRT screen) each walk pristine → light → heavy, with
+- **One socket per bomb — this is an invariant.** A bombed socket is spent: it goes to `dmg` 2 and
+  never becomes window-eligible again, and `s2OpenSocketWindow()` only opens windows on `dmg === 1`
+  components. So if `OZ_BOMBS_NEEDED` ever exceeds `OZ_SOCKETS.length`, the fight **softlocks** —
+  after the last socket is bombed no window can ever open, `s2Detonate()` never fires, and the
+  player can only die and retry into the same wall. Change the two together, always.
+- **Three-stage component damage** replaces the old plant-a-bomb rule. The four core components
+  (the two watermelon shoulder discs, the CRT screen, and the torso core) each walk
+  pristine → light → heavy, with
   matching art from two extra keyed sheets (`boss/ozamatron-parts-light.png` — scratched/dented —
   and `-heavy.png` — rusted/smashed). The sheets' layouts differ slightly from the pristine one,
   so per-sheet crop rects live in `OZ_DMG_RECTS`; limbs swap their own plane's texture+UVs in
@@ -84,13 +91,13 @@ leads to **stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-d
   1. **Chip it open**: `OZ_CHIP_HITS` (6) shots on a pristine core component — any time, sparks
      and a tink per hit — grind it to **light damage** (crunch, dust, flash).
   2. **Only light-damaged components are window-eligible.** A window opens after each throw and
-     laser burst (`OZ_SOCKET_OPEN_MS`), the component itself flashing — discs with a pulsing
-     additive glow, the TV face pulsing green. No markers.
+     laser burst (`OZ_SOCKET_OPEN_MS`), the component itself flashing — discs and torso with a
+     pulsing additive glow, the TV face pulsing green. No markers.
   3. **The critical**: a hit within `OZ_SOCKET_HIT_PX` (66px) while flashing → **heavy damage**:
      rusted/smashed art, a HUD slot fills, chest-beat rage, attacks speed up (× 0.78) and grow
      (+1 orb). A heavily-damaged screen is a **dead TV** — the face never comes back.
   - A shot on an ineligible/dark component clanks; heavy components smolder red.
-- **Everything else dents too.** Torso, arms, and legs are cosmetic damage targets
+- **Everything else dents too.** Arms and legs are cosmetic damage targets
   (`OZ_COSM_LIGHT` 5 hits → light, `OZ_COSM_HEAVY` 12 → heavy) — no gameplay effect, pure
   destruction feedback, and the detonation debris uses the heavy sheet so he comes apart wrecked.
 - **He marches.** The baked legs are erased from the body texture (pelvis armor stays) and
@@ -132,7 +139,7 @@ leads to **stage 3, the Patticus Maximus dance-off** ([stage3-dance.md](stage3-d
 
 ### Victory
 
-Third bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white flash, and the
+Fourth bomb: attacks stop, beeps accelerate for ~1.45s, then triple boom, white flash, and the
 robot comes apart into its **actual body parts** — nine debris planes cut from a second texture
 (`boss/ozamatron-parts.png`, a generated exploded-parts sheet keyed the same way): TV head,
 antenna cap, both shoulder discs, arms, torso core, legs — each flung outward from its true
@@ -168,13 +175,14 @@ All in the config block at the top of `stage2.js`.
 | `S2_STAR_SPEED` | 2.6 u/frame | On-rails speed feel. |
 | `S2_SHIP_AIM_DROP` | 3.5 u | Ship offset below the crosshair, so it can't block the shot. |
 | `S2_ASTEROID_MS` | 1500 / 2200 mobile | Hazard cadence. |
-| `OZ_BOMBS_NEEDED` | 4 | Bombs to win. |
+| `OZ_BOMBS_NEEDED` | 4 | Bombs to win. **Must equal `OZ_SOCKETS.length`** — see the invariant above. |
+| `OZ_SOCKETS` | 4 entries | The bombable components: CRT screen, both discs, torso core. Each carries `part` (keys `OZ_DMG_RECTS`/`OZ_PARTS`), `anchor`, `size`, `z`. |
 | `OZ_SOCKET_OPEN_MS` | 1250 / 1600 mobile | The timing window, opened by each throw. Mobile gets longer because fingers. |
 | `OZ_CHIP_HITS` | 6 | Shots to grind a core component to light damage. |
 | `OZ_COSM_LIGHT` / `OZ_COSM_HEAVY` | 5 / 12 | Cosmetic part damage thresholds (visual only). |
 | `OZ_DMG_RECTS` | per-sheet rects | Damage-sheet crops (auto-measured; layouts differ). |
 | `OZ_LEG` | rects + hip pivots | The marching leg planes. |
-| `OZ_FLASH_SIZE` | 11 u | Disc glow plane size. |
+| `OZ_FLASH_SIZE` | 11 u | Glow plane size for the non-screen sockets (discs, torso). |
 | `OZ_SOCKET_HIT_PX` | 66 | The accuracy requirement, in projected screen px. |
 | `OZ_ATTACK_MS` | 2500 × 0.78^bombs | Attack cadence, angrier per bomb. |
 | `OZ_ORB_SPEED` | 1.6 u/frame | Dodge time per orb. |

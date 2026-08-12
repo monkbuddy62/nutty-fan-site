@@ -4,9 +4,10 @@ Two independent things served from one GitHub Pages site at **pnutsuxnuts.com**:
 
 1. **The shooting gallery** (`/`) — a browser game. Photos and videos of Nutty fly at the screen,
    you shoot them, Jake the Snake shows up at 10 kills and swallows the gallery; beating him goes
-   straight into a 3D on-rails flight ending in the Ozamatron bomb fight, and Ozamatron's defeat
-   leads into the final phase: a DDR-style dance-off against Patticus Maximus. `index.html` +
-   `script.js` (gallery + Jake) + `stage2.js` (3D stage) + `stage3.js` (dance-off) + `style.css`.
+   straight into a 3D on-rails flight ending in the Ozamatron bomb fight; Ozamatron's defeat warps
+   you into the Suess slash-combo duel, and beating him leads into the final phase: a DDR-style
+   dance-off against Patticus Maximus. `index.html` + `script.js` (gallery + Jake) +
+   `stage2.js` (3D stage) + `suess.js` (the duel) + `stage3.js` (dance-off) + `style.css`.
 2. **The campaign map** (`/dnd-map/`) — a vendored copy of Azgaar's Fantasy Map Generator that
    auto-loads one D&D campaign map.
 
@@ -26,7 +27,8 @@ Design and behavior live in `./specs/*.md`, not in the code.
 
 ## Bump the build number on every user-facing change
 
-`index.html` carries the version in five places that must move together:
+`index.html` carries the version in six places that must move together — one per script tag, so
+adding a stage adds a place:
 
 ```html
 <link rel="stylesheet" href="style.css?v=28">   <!-- line 7  -->
@@ -34,6 +36,7 @@ Design and behavior live in `./specs/*.md`, not in the code.
 <script src="script.js?v=28"></script>           <!-- line 62 -->
 <script src="stage2.js?v=28"></script>           <!-- line 63 -->
 <script src="stage3.js?v=28"></script>           <!-- line 64 -->
+<script src="suess.js?v=28"></script>            <!-- line 65 -->
 ```
 
 This is the repo's only release mechanism. The query strings bust the Pages CDN cache; the

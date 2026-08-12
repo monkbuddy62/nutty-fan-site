@@ -38,6 +38,10 @@ There are **two**. Phase 2 begins the moment Jake's HP drops to half or below: h
 second bar of health. The attack timer is cancelled and restarted immediately so the faster cadence
 takes effect without waiting out the current delay.
 
+**Death outranks the refill.** `damageBoss()` checks `hp <= 0` *before* the phase-2 flip, so a blow
+that crosses both half HP and zero kills him rather than resurrecting him at full. Unreachable at
+one damage per shot, but the ordering is load-bearing if damage values ever change.
+
 | | Phase 1 | Phase 2 (rage) |
 |---|---|---|
 | HP on entry | 26 | **refills to 26** |
