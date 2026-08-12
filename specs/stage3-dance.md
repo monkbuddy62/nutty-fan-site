@@ -49,17 +49,21 @@ rest of the session, even back in the gallery.
   (−4 hype, combo break). A tap with no arrow in the window is a free whiff — no penalty,
   mashing is not punished (mobile-friendly).
 - **Patticus strikes the pose of each arrow the moment it reaches the receptors** (or when the
-  player hits it early) — the fiction is that he leads and Pnut matches. Poses are CSS classes
-  (`pose-l/d/u/r`) applying whole-sprite transforms pivoted at his feet — lean left, mirrored
-  lean right (`scaleX(-1)` jig step), jump-stretch, crouch-squash — with ~120ms transitions;
-  his idle bob and the floor color washes run on `--beat`-derived CSS animation durations.
+  player hits it early) — the fiction is that he leads and Pnut matches. Each pose swaps the
+  sprite to a frame from that lane's move set (`S3_FRAMES.lanes`, alternated for variety) via
+  `background-position-x`, plus a small lane-flavored body-english transform (`pose-l/d/u/r`)
+  pivoted at his feet. From measure 32 (`S3.finaleT`, the eighth-note section) the lane sets are
+  ignored and he steps through the **breakdance sequence** — handstands and one-arm spins — one
+  frame per note. Misses flash his fist-pump gloat (frame 22); the 3-miss taunt gets the finger
+  wag (frame 11). His idle bob and the floor washes run on `--beat`-derived CSS durations.
 - He talks: an intro taunt, mockery after 3 consecutive misses, and escalating panic lines at
   15/30/60 combo. The **CROWD HYPE** meter (starts 50%) rises with hits and falls with misses —
   purely cosmetic pressure; it can't kill you.
 
 ### Victory
 
-When the last note resolves (+1.4s), Patticus keels over desaturated, a golden flash
+When the last note resolves (+1.4s), Patticus drops to his knocked-flat frame (15), desaturated
+and settling, a golden flash
 and a four-note fanfare play over a Nutty clip, and the victory screen shows: *PATTICUS MAXIMUS
 OUT-DANCED*, a rating — FLAWLESS FUNK (no GOODs or MISSes) / CERTIFIED GROOVE MACHINE (acc ≥ 90%)
 / FUNKY ENOUGH (≥ 65%) / SLOPPY, BUT THE GALAXY IS SAVED — the PERFECT/GOOD/MISS/combo tally, and
@@ -96,6 +100,7 @@ All in the config block at the top of `stage3.js`.
 | `S3_LEAD_BEATS` | 16 | Patticus solo before the first arrow (~7s of music). |
 | `S3_MEASURES` | 36 | Routine length — last note ~73s in, victory by ~1:15; the song plays on after. |
 | `S3_BTN_DELAY_MS` | 15000 | How long the victory screen withholds the RETURN TO THE GALLERY button. |
+| `S3_FRAME_N` / `S3_FRAMES` | 23 / frame map | The strip's cell count and the pose vocabulary (lane sets, breakdance run, taunt 11, gloat 22, defeat 15). |
 | hype deltas | +2 / +1 / −4 | PERFECT / GOOD / MISS effect on the (cosmetic) CROWD HYPE meter. |
 
 ## Implementation
@@ -113,13 +118,16 @@ All in the config block at the top of `stage3.js`.
 - Per-frame work is transform-only translateY on the live arrows (≤ ~12 elements at peak);
   everything decorative (bob, washes, disco ball) is CSS animation, opacity/transform only.
   Judgments, combo text, and meter writes happen on events, not per frame.
-- Patticus is a single `<img>` (`boss/patticus.png`, 442×720 RGBA, ~320KB) keyed from the
-  user-supplied `Downloads/dance-sprite.png` the same way as the Ozamatron art: frame bars
-  located by dark-fraction and cropped, white background flood-filled from the borders (interior
-  whites survive), stray blobs pruned to the largest connected component, then trimmed and
-  Lanczos-resized. If the art is replaced, re-run that pipeline rather than hand-cropping.
-  Poses only touch `.px-fig`'s transform, so the scale-down at `max-height: 640px` (applied to
-  `#patticus` itself) composes with them.
+- Patticus is one background-image div stepping through `boss/patticus.png` — a **23-frame
+  strip** (231×230 cells, frames bottom-aligned and centered, ~1.1MB) built from the
+  user-supplied `Downloads/dance-sprite.png` sheet: white background flood-keyed from the
+  borders, figures found as 8-connected components (≥3000px; smaller blobs attach to the
+  nearest figure), ordered row-major, each cell trimmed and placed on a uniform bottom-aligned
+  canvas. `s3SetFrame(i)` sets `background-position-x = i·100/(N−1)%` against
+  `background-size: 2300% 100%`; `image-rendering: pixelated` keeps the pixel art crisp. If the
+  sheet is replaced, re-run that segmentation and re-measure the `S3_FRAMES` vocabulary rather
+  than eyeballing cells. Poses only touch `.px-fig`'s transform, so the scale-down at
+  `max-height: 640px` (applied to `#patticus` itself) composes with them.
 
 ## Open questions
 

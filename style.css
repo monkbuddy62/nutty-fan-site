@@ -679,14 +679,14 @@ body::after {
   transition: transform 0.18s ease-out;
 }
 
-/* --- Patticus Maximus: the keyed dance sprite (boss/patticus.png) --- */
+/* --- Patticus Maximus: 23-frame dance strip (boss/patticus.png) --- */
 #patticus {
   position: absolute;
   left: 50%;
   top: 14vh;
-  width: 150px;
+  width: 245px;    /* strip cell aspect 231:230, frames bottom-aligned */
   height: 244px;
-  margin-left: -75px;
+  margin-left: -122px;
   pointer-events: none;
 }
 .px-bob {
@@ -702,23 +702,25 @@ body::after {
   transform-origin: 50% 92%;   /* pivot at the feet — leans and squashes stay planted */
 }
 .px-sprite {
-  display: block;
   width: 100%;
   height: 100%;
+  background: url('boss/patticus.png') no-repeat 0 0;
+  background-size: 2300% 100%;             /* 23 cells side by side */
+  image-rendering: pixelated;              /* it's pixel art — keep it crisp */
   filter: drop-shadow(0 0 16px rgba(255, 213, 74, 0.28));
 }
 
-/* Poses — one per lane, whole-sprite moves; he strikes the move as its
-   arrow hits the receptors. Right mirrors the sprite for a jig step. */
-#patticus.pose-l .px-fig { transform: rotate(-13deg) translateX(-16px); }
-#patticus.pose-r .px-fig { transform: rotate(13deg) translateX(16px) scaleX(-1); }
-#patticus.pose-u .px-fig { transform: translateY(-24px) scale(1.05, 1.1); }
-#patticus.pose-d .px-fig { transform: translateY(10px) scale(1.12, 0.85); }
+/* Poses — the frame swap (stage3.js s3Pose) does the dancing; these are just
+   small body-english accents layered on top, pivoted at the feet. */
+#patticus.pose-l .px-fig { transform: rotate(-6deg) translateX(-10px); }
+#patticus.pose-r .px-fig { transform: rotate(6deg) translateX(10px); }
+#patticus.pose-u .px-fig { transform: translateY(-16px); }
+#patticus.pose-d .px-fig { transform: translateY(8px); }
 
-/* Defeat — the champion keels over on his back */
+/* Defeat — the knocked-flat frame does the work; he just settles and dims */
 #patticus.defeated .px-bob { animation: none; }
 #patticus.defeated .px-fig {
-  transform: rotate(84deg) translate(10px, 26px);
+  transform: translateY(24px);
   transition: transform 1s cubic-bezier(0.4, 1.5, 0.6, 1);
 }
 #patticus.defeated .px-sprite { filter: saturate(0.6) brightness(0.85); }

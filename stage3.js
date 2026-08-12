@@ -8,7 +8,16 @@
 // ============================================================================
 
 const S3_TRACK      = 'audio/pnutsuxnuts_mixdown.mp3';
-const S3_SPRITE     = 'boss/patticus.png';    // keyed dance-sprite art (442×720 RGBA)
+const S3_SPRITE     = 'boss/patticus.png';    // 23-frame dance strip, 231×230 cells, bottom-aligned
+const S3_FRAME_N    = 23;                     // strip cells, row-major from the source sheet
+// Frame vocabulary measured off the sheet: which cells mean what.
+const S3_FRAMES = {
+  lanes: [[6, 12, 3], [13, 7, 10], [2, 5, 0], [1, 4, 14]],  // ← ↓ ↑ → move sets, alternated
+  breakdance: [7, 8, 9, 16, 17, 18, 19, 20, 21],            // finale section: he goes off
+  taunt: 11,    // finger wag — 3-miss mockery
+  gloat: 22,    // fist pump — every miss
+  defeat: 15,   // flat on his back
+};
 const S3_BPM        = 130.7;                  // measured off the mixdown (onset autocorrelation)
 const S3_OFFSET_S   = 0.175;                  // first beat of the track, seconds
 const S3_VOLUME     = 0.7;                    // louder than the boss themes — the song is the point
@@ -33,7 +42,7 @@ const S3 = {
   audio: null, notes: [], nextNote: 0, live: [], lastT: 0,
   combo: 0, maxCombo: 0, perfect: 0, good: 0, miss: 0, groove: 50, _missRun: 0,
   el: null, trackEl: null, pxEl: null, receptors: [], recepPx: [],
-  trackH: 0, sayTimer: null,
+  trackH: 0, sayTimer: null, finaleT: 0, _poseIdx: 0, _bdIdx: 0,
 };
 window.STAGE3 = S3;
 
@@ -68,6 +77,7 @@ function startStage3() {
   S3.phase  = 'intro';
   S3.notes  = s3BuildChart();
   S3.lastT  = S3.notes[S3.notes.length - 1].t;
+  S3.finaleT = S3_OFFSET_S + (S3_LEAD_BEATS + 32 * 4) * (60 / S3_BPM);   // measure 32 — breakdance time
   S3.nextNote = 0; S3.live = [];
   S3.combo = 0; S3.maxCombo = 0; S3.perfect = 0; S3.good = 0; S3.miss = 0;
   S3.groove = 50; S3._missRun = 0;
@@ -113,7 +123,7 @@ function s3BuildDom() {
     <div id="patticus">
       <div class="px-say" id="pxSay"></div>
       <div class="px-bob"><div class="px-fig">
-        <img class="px-sprite" src="${S3_SPRITE}" alt="">
+        <div class="px-sprite"></div>
       </div></div>
     </div>
     <div id="dance-combo"></div>
@@ -271,8 +281,10 @@ function s3MissNote(n) {
   s3Groove(-4);
   s3JudgePop('MISS', 'j-miss');
   s2Tone(150, 0.15, 'sawtooth', 0.06);
+  s3SetFrame(S3_FRAMES.gloat);   // he loves your failure (next pose overwrites it)
   if (S3._missRun === 3) {
     s3Say(S3_MISS_TAUNTS[Math.floor(Math.random() * S3_MISS_TAUNTS.length)], 2000);
+    s3SetFrame(S3_FRAMES.taunt);
     S3._missRun = 0;
   }
 }
@@ -300,12 +312,25 @@ function s3JudgePop(txt, cls) {
   el.classList.add('pop');
 }
 
+function s3SetFrame(i) {
+  const el = S3.el && S3.el.querySelector('.px-sprite');
+  if (el) el.style.backgroundPositionX = (i * 100 / (S3_FRAME_N - 1)).toFixed(4) + '%';
+}
+
 function s3Pose(lane) {
   const px = S3.pxEl;
   if (!px || px.classList.contains('defeated')) return;
   px.classList.remove('pose-l', 'pose-d', 'pose-u', 'pose-r');
   void px.offsetWidth;
   px.classList.add(['pose-l', 'pose-d', 'pose-u', 'pose-r'][lane]);
+  // Finale section: breakdance sequence; otherwise alternate the lane's move set
+  const t = S3.audio ? S3.audio.currentTime : 0;
+  if (S3.finaleT && t >= S3.finaleT) {
+    s3SetFrame(S3_FRAMES.breakdance[S3._bdIdx++ % S3_FRAMES.breakdance.length]);
+  } else {
+    const set = S3_FRAMES.lanes[lane];
+    s3SetFrame(set[S3._poseIdx++ % set.length]);
+  }
 }
 
 function s3Say(txt, ms = 1800) {
@@ -332,6 +357,7 @@ function s3Win() {
   if (S3.phase === 'victory' || !S3.active) return;
   S3.phase = 'victory';
   if (S3.pxEl) S3.pxEl.classList.add('defeated');
+  s3SetFrame(S3_FRAMES.defeat);
   s3Say('OUT-DANCED?! IMPOSSIBLE…', 2600);
   s2Flash('rgba(255,220,80,0.28)');
   [[523, 0], [659, 130], [784, 260], [1047, 400]].forEach(([f, at]) =>
