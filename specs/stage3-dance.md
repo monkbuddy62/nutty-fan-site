@@ -123,7 +123,10 @@ All in the config block at the top of `stage3.js`.
   user-supplied `Downloads/dance-sprite.png` sheet: white background flood-keyed from the
   borders, figures found as 8-connected components (≥3000px; smaller blobs attach to the
   nearest figure), ordered row-major, each cell trimmed and placed on a uniform bottom-aligned
-  canvas. `s3SetFrame(i)` sets `background-position-x = i·100/(N−1)%` against
+  canvas. Border flood-fill can't reach background trapped inside arm-body loops, and interior
+  whites can't be keyed blindly (eyes and grins are white too) — the four enclosed pockets
+  (frames 0, 2, 10, 11, all on his left side) were identified visually and zeroed by
+  frame+centroid; a re-run of the pipeline needs that visual pass repeated. `s3SetFrame(i)` sets `background-position-x = i·100/(N−1)%` against
   `background-size: 2300% 100%`; `image-rendering: pixelated` keeps the pixel art crisp. If the
   sheet is replaced, re-run that segmentation and re-measure the `S3_FRAMES` vocabulary rather
   than eyeballing cells. Poses only touch `.px-fig`'s transform, so the scale-down at
