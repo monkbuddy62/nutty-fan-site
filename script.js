@@ -43,6 +43,7 @@ const streakMessages = {
 
 const TARGET_LIFETIME_MS  = 18000;
 const REMINISCE_IDLE_MS   = 25000;
+const USE_LASER_SFX       = true;   // laser-1/laser-2 mp3s for shots; false = synth pew
 
 // === STATE ===
 let mediaFiles          = [];
@@ -62,6 +63,7 @@ let VW                  = window.innerWidth;
 let VH                  = window.innerHeight;
 let lastInteractionTime = Date.now();
 let reminiscing         = false;
+let stage2Preload       = null;      // promise for the lazy three.min.js load
 
 // === SHOOT HINT ===
 function showShootHint() {
@@ -128,10 +130,36 @@ function getCtx() {
   return audioCtx;
 }
 
+// Recorded laser shots, decoded once into WebAudio buffers so the 90ms
+// autofire can overlap them freely. Until they're ready (or if loading
+// fails, or USE_LASER_SFX is off) the synth pew below still fires.
+let laserBuffers = null;
+let laserLoading = false;
+
+function loadLaserSfx(c) {
+  laserLoading = true;
+  Promise.all(['laser-1.mp3', 'laser-2.mp3'].map(f =>
+    fetch(AUDIO_DIR + f).then(r => r.arrayBuffer()).then(b => c.decodeAudioData(b))
+  )).then(bufs => { laserBuffers = bufs; }).catch(() => {});
+}
+
 function playPew() {
   if (muted) return;
   try {
-    const c    = getCtx();
+    const c = getCtx();
+    if (USE_LASER_SFX) {
+      if (!laserBuffers && !laserLoading) loadLaserSfx(c);
+      if (laserBuffers) {
+        const src  = c.createBufferSource();
+        const gain = c.createGain();
+        src.buffer = laserBuffers[Math.floor(Math.random() * laserBuffers.length)];
+        src.playbackRate.value = 0.94 + Math.random() * 0.12;   // rapid-fire variation
+        gain.gain.value = 0.09;   // quiet — it fires ~11×/s and must sit under clips/themes
+        src.connect(gain); gain.connect(c.destination);
+        src.start();
+        return;
+      }
+    }
     const osc  = c.createOscillator();
     const gain = c.createGain();
     osc.connect(gain); gain.connect(c.destination);
@@ -174,11 +202,72 @@ function playNuttyClip() {
   currentClip = a;
 }
 
+// === THEME PLAYBACK — shared autoplay-policy fallback ===
+// play() rejects until the page has a trusted gesture (?fight= warps and the
+// initial page load both hit this). On rejection, retry on the next tap —
+// but only if the requesting phase still wants its music by then.
+function playWithGestureFallback(audio, stillWanted) {
+  audio.play().catch(() => {
+    // Keep retrying on taps until one actually starts playback — a single
+    // rejected retry must not consume the fallback
+    const cleanup = () => {
+      document.removeEventListener('mousedown', kick);
+      document.removeEventListener('touchstart', kick);
+    };
+    const kick = () => {
+      if (!stillWanted()) { cleanup(); return; }
+      if (muted) return;
+      audio.play().then(cleanup).catch(() => {});
+    };
+    document.addEventListener('mousedown', kick);
+    document.addEventListener('touchstart', kick);
+  });
+}
+
+// === GALLERY THEME — plays whenever the gallery itself is on screen:
+// game start, the post-Jake intermission, and the post-stage-2 return.
+// Pauses (keeping its place) for boss fights and stage 2.
+let galleryTheme = null;
+
+function galleryActive() {
+  // Once the dance-off has been won (STAGE3.done), the mixdown owns the audio
+  // for the rest of the session — the gallery theme never comes back.
+  return !boss.active && !(window.STAGE2 && STAGE2.active)
+      && !(window.STAGE3 && (STAGE3.active || STAGE3.done))
+      && !document.getElementById('gameOverScreen');
+}
+
+function startGalleryTheme() {
+  if (!galleryTheme) {
+    galleryTheme = new Audio(AUDIO_DIR + 'gallery-theme.mp3');
+    galleryTheme.loop = true;
+    galleryTheme.volume = 0.45;
+  }
+  if (muted) return;
+  playWithGestureFallback(galleryTheme, galleryActive);
+}
+
+function stopGalleryTheme() {
+  if (galleryTheme) galleryTheme.pause();   // no rewind — it resumes where it left off
+}
+
 muteBtn.addEventListener('click', () => {
   muted = !muted;
   muteBtn.textContent = muted ? '🔇' : '🔊';
   muteBtn.classList.toggle('muted', muted);
   if (muted && currentClip) { currentClip.pause(); currentClip.currentTime = 0; }
+  if (muted && jakeVoice) jakeVoice.pause();
+  // Boss themes pause/resume rather than restarting
+  if (bossTheme) {
+    if (muted) bossTheme.pause();
+    else if (boss.active) bossTheme.play().catch(() => {});
+  }
+  if (window.s2ThemeMute) s2ThemeMute();
+  if (window.s3ThemeMute) s3ThemeMute();
+  if (galleryTheme) {
+    if (muted) galleryTheme.pause();
+    else if (galleryActive()) galleryTheme.play().catch(() => {});
+  }
 });
 
 // === EXPLOSION STYLES ===
@@ -313,22 +402,104 @@ function explodeShatter(target) {
   }
 }
 
-const EXPLOSION_STYLES = ['dust', 'stars', 'shatter'];
+// Radial glass-shatter: the photo breaks into K irregular shards that fan out
+// from the exact impact point — every break is different, and the crack
+// pattern radiates from where the bullet actually landed.
+function explodeShards(target, hx, hy) {
+  const imgEl = target.el.querySelector('img');
+  const bw = target.w, bh = target.h;
+  const ox = target.screenX - bw / 2, oy = target.screenY - bh / 2;
+  const rotA = target.rot * Math.PI / 180;
 
-function triggerExplosion(target) {
+  // Impact point in the photo's own (unrotated) frame, clamped inward
+  const dx = (hx ?? target.screenX) - target.screenX;
+  const dy = (hy ?? target.screenY) - target.screenY;
+  const lx =  dx * Math.cos(rotA) + dy * Math.sin(rotA);
+  const ly = -dx * Math.sin(rotA) + dy * Math.cos(rotA);
+  const ix = Math.max(bw * 0.15, Math.min(bw * 0.85, bw / 2 + lx));
+  const iy = Math.max(bh * 0.15, Math.min(bh * 0.85, bh / 2 + ly));
+
+  const K = 9;
+  const angs = [];
+  for (let i = 0; i < K; i++) angs.push((i / K) * Math.PI * 2 + (Math.random() - 0.5) * 0.55);
+  angs.sort((a, b) => a - b);
+
+  // Ray from the impact point to the rect edge (spilling slightly past it)
+  const edge = a => {
+    const ex = Math.cos(a), ey = Math.sin(a);
+    let t = Infinity;
+    if (ex > 0) t = Math.min(t, (bw - ix) / ex); else if (ex < 0) t = Math.min(t, -ix / ex);
+    if (ey > 0) t = Math.min(t, (bh - iy) / ey); else if (ey < 0) t = Math.min(t, -iy / ey);
+    t *= 1.08;
+    return [ix + ex * t, iy + ey * t];
+  };
+
+  for (let i = 0; i < K; i++) {
+    const a1 = angs[i];
+    const a2 = i + 1 < K ? angs[i + 1] : angs[0] + Math.PI * 2;
+    const [x1, y1] = edge(a1);
+    const [x2, y2] = edge(a2);
+    const midA = (a1 + a2) / 2 + rotA;              // fly direction, world space
+    const flyD = 150 + Math.random() * 280;
+    const dur  = 0.5 + Math.random() * 0.4;
+    const rot  = (Math.random() - 0.5) * 440;
+
+    const piece = document.createElement('div');
+    Object.assign(piece.style, {
+      position: 'fixed', left: ox + 'px', top: oy + 'px',
+      width: bw + 'px', height: bh + 'px',
+      backgroundImage: `url(${imgEl.src})`,
+      backgroundSize: `${bw}px ${bh}px`,
+      clipPath: `polygon(${ix}px ${iy}px, ${x1}px ${y1}px, ${x2}px ${y2}px)`,
+      transformOrigin: `${bw / 2}px ${bh / 2}px`,
+      transform: `rotate(${target.rot}deg)`,
+      pointerEvents: 'none', zIndex: '200',
+      transition: `transform ${dur}s cubic-bezier(0.2, 0.6, 0.5, 1), opacity ${dur * 0.7}s ease-in ${dur * 0.3}s`,
+      opacity: '1',
+    });
+    document.body.appendChild(piece);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      piece.style.transform =
+        `translate(${Math.cos(midA) * flyD}px, ${Math.sin(midA) * flyD + 55}px) rotate(${target.rot + rot}deg) scale(0.92)`;
+      piece.style.opacity = '0';
+    }));
+    setTimeout(() => piece.remove(), dur * 1000 + 150);
+  }
+
+  // Hot embers off the impact point
+  for (let i = 0; i < 6; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = 50 + Math.random() * 130;
+    spawnParticle(hx ?? target.screenX, hy ?? target.screenY, {
+      width: '3px', height: '3px',
+      background: '#ffcc66', borderRadius: '50%',
+      boxShadow: '0 0 8px #ffaa33',
+      transform: 'translate(-50%,-50%)', opacity: '1',
+    }, Math.cos(a) * d, Math.sin(a) * d, 0.45 + Math.random() * 0.3, 0);
+  }
+}
+
+function triggerExplosion(target, hx, hy) {
   const el = target.el;
   const cx = target.screenX;
   const cy = target.screenY;
-
-  const style = EXPLOSION_STYLES[Math.floor(Math.random() * EXPLOSION_STYLES.length)];
-  if (style === 'dust')         explodeDust(cx, cy);
-  else if (style === 'stars')   explodeStars(cx, cy);
-  else if (style === 'shatter') explodeShatter(target);
 
   const flash = document.createElement('div');
   flash.className = 'kill-flash';
   document.body.appendChild(flash);
   setTimeout(() => flash.remove(), 220);
+
+  // Shard break-up is the star of the show; dust and stars stay as variety
+  const imgEl = el.querySelector('img');
+  const roll = Math.random();
+  if (roll < 0.55 && imgEl && imgEl.src) {
+    explodeShards(target, hx, hy);
+    el.remove();   // the shards ARE the photo now
+    setTimeout(spawnTarget, 200 + Math.random() * 600);
+    return;
+  }
+  if (roll < 0.8) explodeStars(cx, cy);
+  else            explodeDust(cx, cy);
 
   // Snap to fixed position so the shrink-out happens in place
   const hw = target.w / 2, hh = target.h / 2;
@@ -420,28 +591,31 @@ function drawHudOverlay() {
   xhCtx.stroke();
   xhCtx.restore();
 
-  // Lock-on brackets around nearest target in range
-  let locked = null, nearestD = HIT_RADIUS;
+  // Lock-on brackets around the nearest hittable target — same rotated-rect
+  // math as the hit test, so what locks is exactly what a shot would hit
+  let locked = null, nearestD = Infinity;
   for (const t of targets) {
     if (t.dead) continue;
-    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
-    if (d < nearestD) { nearestD = d; locked = t; }
+    const d = distToTarget(mouseX, mouseY, t);
+    if (d < targetHitMargin(t) && d < nearestD) { nearestD = d; locked = t; }
   }
   if (locked && locked.w < 550) {
     const pad = 12, tl = 20;
-    const lx = locked.screenX - locked.w/2 - pad, ly = locked.screenY - locked.h/2 - pad;
-    const rx = locked.screenX + locked.w/2 + pad, ry = locked.screenY + locked.h/2 + pad;
+    const hw = locked.w / 2 + pad, hh = locked.h / 2 + pad;
     xhCtx.save();
+    // Rotate the whole bracket frame with the photo
+    xhCtx.translate(locked.screenX, locked.screenY);
+    xhCtx.rotate(locked.rot * Math.PI / 180);
     xhCtx.strokeStyle = '#ff6600';
     xhCtx.shadowColor = '#ff6600';
     xhCtx.shadowBlur  = 14;
     xhCtx.lineWidth   = 1.5;
     xhCtx.lineCap     = 'square';
     xhCtx.beginPath();
-    xhCtx.moveTo(lx+tl,ly); xhCtx.lineTo(lx,ly); xhCtx.lineTo(lx,ly+tl);
-    xhCtx.moveTo(rx-tl,ly); xhCtx.lineTo(rx,ly); xhCtx.lineTo(rx,ly+tl);
-    xhCtx.moveTo(lx,ry-tl); xhCtx.lineTo(lx,ry); xhCtx.lineTo(lx+tl,ry);
-    xhCtx.moveTo(rx,ry-tl); xhCtx.lineTo(rx,ry); xhCtx.lineTo(rx-tl,ry);
+    xhCtx.moveTo(-hw+tl,-hh); xhCtx.lineTo(-hw,-hh); xhCtx.lineTo(-hw,-hh+tl);
+    xhCtx.moveTo( hw-tl,-hh); xhCtx.lineTo( hw,-hh); xhCtx.lineTo( hw,-hh+tl);
+    xhCtx.moveTo(-hw, hh-tl); xhCtx.lineTo(-hw, hh); xhCtx.lineTo(-hw+tl, hh);
+    xhCtx.moveTo( hw, hh-tl); xhCtx.lineTo( hw, hh); xhCtx.lineTo( hw-tl, hh);
     xhCtx.stroke();
     xhCtx.restore();
   }
@@ -525,10 +699,34 @@ function drawCrosshairAt(x, y) {
   xhCtx.restore();
 }
 
+// === TARGETING — rotated-rect hit math shared by lock-on and shots ===
+// Distance from a screen point to a target's rotated rectangle (0 = inside).
+// The cursor is inverse-rotated into the photo's own frame first, so corners
+// of tilted photos are exactly as hittable as they look.
+function distToTarget(px, py, t) {
+  const a   = t.rot * Math.PI / 180;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  const dx  = px - t.screenX, dy = py - t.screenY;
+  const lx  =  dx * cos + dy * sin;
+  const ly  = -dx * sin + dy * cos;
+  const qx  = Math.max(0, Math.abs(lx) - t.w / 2);
+  const qy  = Math.max(0, Math.abs(ly) - t.h / 2);
+  return Math.hypot(qx, qy);
+}
+
+// Grace margin outside the rect: generous for tiny far-away targets (matches
+// the old 110px-from-center feel), tighter for big ones you can just hit.
+function targetHitMargin(t) {
+  return Math.max(40, HIT_RADIUS - Math.min(t.w, t.h) / 2);
+}
+
 // === AUTOFIRE — hold mouse to spam pew pew pew ===
 function fireShot() {
   playPew();
   shootFlash = { x: mouseX, y: mouseY, t: Date.now() };
+
+  // Stage 2 owns the whole shot (screen-space projection into the 3D scene)
+  if (window.STAGE2 && STAGE2.active) { stage2Fire(); return; }
 
   // Boss panel hit
   for (let i = boss.panels.length - 1; i >= 0; i--) {
@@ -552,12 +750,12 @@ function fireShot() {
     }
   }
 
-  // Normal targets
-  let nearest = null, nearestD = HIT_RADIUS;
+  // Normal targets — anywhere on the rotated photo (plus grace margin) hits
+  let nearest = null, nearestD = Infinity;
   for (const t of targets) {
     if (t.dead) continue;
-    const d = Math.hypot(mouseX - t.screenX, mouseY - t.screenY);
-    if (d < nearestD) { nearestD = d; nearest = t; }
+    const d = distToTarget(mouseX, mouseY, t);
+    if (d < targetHitMargin(t) && d < nearestD) { nearestD = d; nearest = t; }
   }
   if (nearest) shootTarget(nearest);
 }
@@ -566,6 +764,7 @@ function fireShot() {
 document.addEventListener('mousedown', e => {
   if (e.button !== 0 || e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
+  if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
   touchInteraction();
   fireShot();
   autoFireTimer = setInterval(fireShot, FIRE_RATE_MS);
@@ -581,6 +780,7 @@ window.addEventListener('mouseleave', () => { mouseX = -9999; mouseY = -9999; })
 document.addEventListener('touchstart', e => {
   if (e.target.closest('button')) return;
   if (document.getElementById('gameOverScreen')) return;
+  if (window.STAGE3 && STAGE3.active) return;   // dance-off: lane buttons only, no shooting
   e.preventDefault();
   touchInteraction();
   const t = e.touches[0];
@@ -615,9 +815,24 @@ fetch('media/manifest.json')
     mediaFiles = files;
     loadingScreen.classList.add('gone');
     initStars();
-    for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     requestAnimationFrame(loop);
+
+    // Debug warp: ?fight=stage2 jumps to the flight, ?fight=ozamatron to the
+    // boss, ?fight=dance straight to the Patticus Maximus dance-off
+    const fight = new URLSearchParams(location.search).get('fight');
+    if (fight === 'dance' && window.startStage3) {
+      startStage3();
+      return;
+    }
+    if ((fight === 'stage2' || fight === 'ozamatron') && window.STAGE2) {
+      STAGE2.skipToBoss = fight === 'ozamatron';
+      enterStage2();
+      return;
+    }
+
+    for (let i = 0; i < MAX_ON_SCREEN; i++) spawnTarget();
     setTimeout(showShootHint, 1200);
+    startGalleryTheme();
   })
   .catch(() => {
     loadingText.textContent = 'Add files to media/ and run build-manifest.py';
@@ -630,7 +845,7 @@ fetch('media/manifest.json')
 
 // === SPAWN — targets enter from all four screen edges and grow as they close in ===
 function spawnTarget() {
-  if (boss.active) return;
+  if (boss.active || (window.STAGE2 && STAGE2.active) || (window.STAGE3 && STAGE3.active)) return;
   if (!mediaFiles.length || targets.length >= MAX_ON_SCREEN) return;
 
   const active = new Set(targets.map(t => t.file));
@@ -718,9 +933,75 @@ function fadeTarget(t) {
   }, 2600);
 }
 
+// Meaty through-and-through impact
+// The big one — reserved for boss deaths (Jake's shatter, Ozamatron's blast)
+let explosionSfx = null;
+
+function playExplosionSfx() {
+  if (muted) return;
+  if (!explosionSfx) {
+    explosionSfx = new Audio(AUDIO_DIR + 'explosion.mp3');
+    explosionSfx.volume = 0.8;
+  }
+  explosionSfx.currentTime = 0;
+  explosionSfx.play().catch(() => {});
+}
+
+function playThunk() {
+  if (muted) return;
+  try {
+    const c    = getCtx();
+    const osc  = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(240, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(70, c.currentTime + 0.1);
+    gain.gain.setValueAtTime(0.16, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.12);
+    osc.start(c.currentTime); osc.stop(c.currentTime + 0.13);
+  } catch (e) {}
+}
+
+// A bullet punches clean through: a hole appears at the hit point, the photo
+// takes an impact kick and keeps flying — wounded. The next hit kills.
+function punchHole(t, hx, hy) {
+  t.hasHole = true;
+
+  // Hit point in element units (the el is BASE_PX wide pre-transform)
+  const a = t.rot * Math.PI / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const dx = hx - t.screenX, dy = hy - t.screenY;
+  const lx =  dx * cos + dy * sin;
+  const ly = -dx * sin + dy * cos;
+  const s  = (t.w / BASE_PX) || 1;
+  const ex = BASE_PX / 2 + lx / s;
+  const ey = (BASE_PX * (t.hRatio || 1)) / 2 + ly / s;
+  const r  = 26 + Math.random() * 10;   // element units — hole scales with the photo
+  const m  = `radial-gradient(circle at ${ex}px ${ey}px, transparent ${r}px, black ${r + 9}px)`;
+  t.el.style.webkitMaskImage = m;
+  t.el.style.maskImage = m;
+
+  // Impact physics: kicked away from the hit point, set tumbling
+  const d = Math.hypot(dx, dy) || 1;
+  t.vx += (-dx / d) * 2.4;
+  t.vy += (-dy / d) * 2.4;
+  t.rotSpeed = Math.max(-2.5, Math.min(2.5, t.rotSpeed + (Math.random() - 0.5) * 3));
+
+  explodeDust(hx, hy);
+  playThunk();
+}
+
 // === SHOOT — explode immediately in place ===
 function shootTarget(target) {
   if (target.dead) return;
+
+  // Big photos sometimes take a through-and-through first — hole, jolt,
+  // still flying. No score for a wound; the follow-up shot kills.
+  if (!target.hasHole && target.w > 180 && !boss.sucking && Math.random() < 0.45) {
+    punchHole(target, mouseX, mouseY);
+    return;
+  }
+
   target.dead = true;
   if (target.fadeTimer) { clearTimeout(target.fadeTimer); target.fadeTimer = null; }
   targets.splice(targets.indexOf(target), 1);
@@ -738,12 +1019,31 @@ function shootTarget(target) {
   playNuttyClip();
   target._dx = 0;
   target._dy = 0;
-  triggerExplosion(target);
+  triggerExplosion(target, mouseX, mouseY);
 }
 
 // === GAME LOOP ===
 function loop() {
   frameCount++;
+
+  // Stage 3 (the dance-off) is pure DOM — the warp starfield keeps running
+  // behind the dance floor, but shooting and the crosshair are done.
+  if (window.STAGE3 && STAGE3.active) {
+    drawWarp();
+    stage3Tick();
+    requestAnimationFrame(loop);
+    return;
+  }
+
+  // Stage 2 owns the frame: the 3D scene renders instead of warp + targets.
+  // The crosshair overlay stays — same reticle in both worlds.
+  if (window.STAGE2 && STAGE2.active) {
+    stage2Tick();
+    drawHudOverlay();
+    requestAnimationFrame(loop);
+    return;
+  }
+
   drawWarp();
   drawHudOverlay();
 
@@ -752,6 +1052,30 @@ function loop() {
   for (let i = targets.length - 1; i >= 0; i--) {
     const t = targets[i];
     if (t.dead) continue;
+
+    // Jake's entrance: photos spiral into his mouth, shrinking as they go
+    if (boss.sucking) {
+      const m  = bossMouthPoint();
+      const dx = m.x - t.sx, dy = m.y - t.sy;
+      const d  = Math.hypot(dx, dy) || 1;
+      t.suckV  = (t.suckV || 3) * 1.045;              // accelerating pull, ~1.2s total
+      t.sx    += dx / d * Math.min(t.suckV, d);
+      t.sy    += dy / d * Math.min(t.suckV, d);
+      t.rot   += 9;
+      t.scale  = Math.max(0.04, t.scale * 0.955);
+      const shr = t.hRatio || 1;
+      const sdw = t.baseSize * t.scale;
+      t.screenX = t.sx; t.screenY = t.sy;
+      t.w = sdw; t.h = sdw * shr;
+      t.el.style.transform = `translate(${t.sx - BASE_PX / 2}px,${t.sy - BASE_PX * shr / 2}px) scale(${sdw / BASE_PX}) rotate(${t.rot}deg)`;
+      if (d < 45) {                                    // ...gulp
+        t.dead = true;
+        t.el.remove();
+        targets.splice(i, 1);
+        explodeDust(m.x, m.y);
+      }
+      continue;
+    }
 
     // Flee: only compute hypot when cursor is plausibly close (cheap AABB pre-check)
     const fx = mouseX - t.sx;
@@ -811,6 +1135,13 @@ function loop() {
     alive.forEach((t, i) => { t.el.style.zIndex = i + 1; });
   }
 
+  // Last photo swallowed → gulp, mouth closes
+  if (boss.sucking && targets.length === 0) {
+    boss.sucking = false;
+    playGulp();
+    if (boss.active && boss.state === 'attack') setBossState('idle');
+  }
+
   targetsValEl.textContent = String(activeCount).padStart(2, '0');
   speedValEl.textContent   = activeCount > 0 ? (totalSpeed / activeCount).toFixed(1) : '0.0';
 
@@ -847,6 +1178,7 @@ const PLAYER_HP_MAX = 3;
 const boss = {
   active: false, hp: BOSS_HP_MAX, phase: 1,
   state: 'idle',   // idle | attack | hit | rage
+  sucking: false,  // entrance: inhaling the gallery
   mouthOpen: false,
   el: null, imgEl: null, hudEl: null,
   attackLoop: null,
@@ -855,12 +1187,86 @@ const boss = {
 
 let playerHp = PLAYER_HP_MAX;
 
+// === BOSS THEME — Jake's fight music, this fight only ===
+let bossTheme = null;
+
+function startBossTheme() {
+  if (!bossTheme) {
+    bossTheme = new Audio(BOSS_DIR + 'jake-theme.mp3');
+    bossTheme.loop = true;
+    bossTheme.volume = 0.55;
+  }
+  bossTheme.currentTime = 0;
+  if (!muted) playWithGestureFallback(bossTheme, () => boss.active);
+}
+
+function stopBossTheme() {
+  if (bossTheme) { bossTheme.pause(); bossTheme.currentTime = 0; }
+}
+
 const BOSS_IMGS = { idle: 'boss-idle.png', attack: 'boss-attack.png', hit: 'boss-hit.png', rage: 'boss-rage.png' };
 
 function setBossState(s) {
   boss.state     = s;
   boss.mouthOpen = s === 'attack';
   if (boss.imgEl) boss.imgEl.src = BOSS_DIR + (BOSS_IMGS[s] || 'boss-idle.png');
+}
+
+// === JAKE VOICE LINES — one at a time; story beats preempt hit grunts ===
+let jakeVoice = null;
+
+function playJakeVoice(name, preempt = true) {
+  if (muted) return;
+  if (jakeVoice && !jakeVoice.paused && !jakeVoice.ended) {
+    if (!preempt) return;   // grunts never interrupt a line already playing
+    jakeVoice.pause();
+  }
+  jakeVoice = new Audio(BOSS_DIR + name + '.mp3');
+  jakeVoice.volume = 0.9;
+  jakeVoice.play().catch(() => {});
+}
+
+// Current mouth position in screen px — tracked live while Jake slides in
+function bossMouthPoint() {
+  if (boss.el) {
+    const r = boss.el.getBoundingClientRect();
+    return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.65 };
+  }
+  return { x: VW / 2, y: 150 };
+}
+
+// Rising inhale for the entrance suck
+function playSuck() {
+  if (muted) return;
+  try {
+    const c    = getCtx();
+    const osc  = c.createOscillator();
+    const gain = c.createGain();
+    osc.connect(gain); gain.connect(c.destination);
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(110, c.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, c.currentTime + 1.4);
+    gain.gain.setValueAtTime(0.09, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.5);
+    osc.start(c.currentTime); osc.stop(c.currentTime + 1.55);
+  } catch (e) {}
+}
+
+function playGulp() {
+  if (muted) return;
+  try {
+    const c = getCtx();
+    for (const [freq, at] of [[300, 0], [180, 0.12]]) {
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.connect(gain); gain.connect(c.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, c.currentTime + at);
+      gain.gain.setValueAtTime(0.16, c.currentTime + at);
+      gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + at + 0.15);
+      osc.start(c.currentTime + at); osc.stop(c.currentTime + at + 0.17);
+    }
+  } catch (e) {}
 }
 
 function livesStr() {
@@ -903,6 +1309,8 @@ function startBoss() {
 
   buildBossDOM();
   setBossState('idle');
+  stopGalleryTheme();
+  startBossTheme();
 
   // Slide in from top
   requestAnimationFrame(() => {
@@ -910,12 +1318,21 @@ function startBoss() {
     boss.hudEl.classList.add('visible');
   });
 
-  // Slow then clear existing targets
-  targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
-  setTimeout(() => {
+  // Entrance: Jake inhales the whole gallery — targets spiral into his mouth
+  // (per-frame motion in loop()). Mouth open to eat; state resets on gulp.
+  boss.sucking = true;
+  setBossState('attack');
+  targets.forEach(t => { if (t.fadeTimer) { clearTimeout(t.fadeTimer); t.fadeTimer = null; } });
+  playJakeVoice('jake-eat-you-up');
+  playSuck();
+  setTimeout(() => {   // safety: force-swallow any stragglers
+    if (!boss.sucking) return;
     [...targets].forEach(t => { t.dead = true; t.el.remove(); });
     targets.length = 0;
-  }, 1000);
+  }, 2600);
+
+  // three.min.js loads during the fight — his defeat leads straight to stage 2
+  preloadStage2();
 
   bossLoop();
 }
@@ -1037,11 +1454,13 @@ function restartGame() {
   }
 
   for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250);
+  startGalleryTheme();
 }
 
 function damageBoss(amount = 1) {
   if (!boss.active) return;
   boss.hp = Math.max(0, boss.hp - amount);
+  playJakeVoice(Math.random() < 0.5 ? 'jake-ow' : 'jake-stop-that', false);
 
   const fill = document.getElementById('boss-hp-fill');
   if (fill) fill.style.width = (boss.hp / BOSS_HP_MAX * 100) + '%';
@@ -1055,6 +1474,7 @@ function damageBoss(amount = 1) {
   // Phase 2 at half HP
   if (boss.phase === 1 && boss.hp <= BOSS_HP_MAX / 2) {
     boss.phase = 2;
+    playJakeVoice('jake-shits-painful');
     clearTimeout(boss.attackLoop);
     setBossState('rage');
     bossLoop();
@@ -1065,28 +1485,98 @@ function damageBoss(amount = 1) {
 
 function defeatBoss() {
   boss.active = false;
+  boss.sucking = false;
+  stopBossTheme();
+  playJakeVoice('jake-defeat');
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(destroyPanel);
   boss.panels = [];
 
   if (boss.el) {
     const r = boss.el.getBoundingClientRect();
+    playExplosionSfx();
     explodeShatter({ el: boss.imgEl, screenX: r.left + r.width/2, screenY: r.top + r.height/2, w: r.width, h: r.height, rot: 0 });
+    // The photos he swallowed blast back out of his head...
+    burstPhotosFromBoss(r.left + r.width / 2, r.top + r.height * 0.4);
     boss.el.remove();
   }
   boss.hudEl?.remove();
   boss.el = boss.imgEl = boss.hudEl = null;
 
-  setTimeout(() => { for (let i = 0; i < MAX_ON_SCREEN; i++) setTimeout(spawnTarget, i * 250); }, 1800);
+  // ...and the game follows them straight into deep space. No intermission —
+  // three.min.js has been loading since the fight began.
+  setTimeout(enterStage2, 1500);
+}
+
+// Defeat spectacle: swallowed photos erupt from Jake's head and scatter
+function burstPhotosFromBoss(cx, cy) {
+  const pics = mediaFiles.filter(f => !/\.(mp4|webm|mov)$/i.test(f));
+  if (!pics.length) return;
+  const n = Math.min(14, pics.length);
+  for (let i = 0; i < n; i++) {
+    const file = pics[Math.floor(Math.random() * pics.length)];
+    const el = document.createElement('div');
+    el.className = 'target';
+    el.style.cssText = `position:fixed;left:${cx}px;top:${cy}px;width:130px;` +
+      `transform:translate(-50%,-50%) scale(0.08) rotate(0deg);opacity:1;pointer-events:none;z-index:210;` +
+      `transition:transform ${1.1 + Math.random() * 0.5}s cubic-bezier(0.16, 0.8, 0.4, 1), opacity 0.45s ease-in ${0.9 + Math.random() * 0.4}s;`;
+    const img = document.createElement('img');
+    img.alt = ''; img.src = MEDIA_DIR + encodeURIComponent(file);
+    el.appendChild(img);
+    document.body.appendChild(el);
+
+    // Up-and-outward hemisphere, like the head popped its cork
+    const ang  = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.3;
+    const dist = 420 + Math.random() * 520;
+    const rot  = (Math.random() - 0.5) * 720;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      el.style.transform = `translate(${Math.cos(ang) * dist - 65}px, ${Math.sin(ang) * dist - 65}px) scale(${0.8 + Math.random() * 0.5}) rotate(${rot}deg)`;
+      el.style.opacity = '0';
+    }));
+    setTimeout(() => el.remove(), 2100);
+  }
+  playBoom();
 }
 
 function endBoss() {
   boss.active = false;
+  stopBossTheme();
   clearTimeout(boss.attackLoop);
   [...boss.panels].forEach(p => { p.dead = true; p.el.remove(); });
   boss.panels = [];
   boss.el?.remove(); boss.hudEl?.remove();
   boss.el = boss.imgEl = boss.hudEl = null;
+}
+
+// === STAGE 2 HANDOFF — deep space begins 10 kills after Jake falls ===
+// The 3D stage itself lives in stage2.js; this is only the bridge out of the
+// gallery. three.min.js is injected lazily so the gallery never pays for it.
+
+function preloadStage2() {
+  if (!stage2Preload) {
+    stage2Preload = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'libs/three.min.js';
+      s.onload = resolve;
+      s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+  return stage2Preload;
+}
+
+function enterStage2() {
+  stopGalleryTheme();
+  // Wind the gallery down the same way startBoss does
+  targets.forEach(t => { t.vx *= 0.15; t.vy *= 0.15; });
+  setTimeout(() => {
+    [...targets].forEach(t => { if (t.fadeTimer) clearTimeout(t.fadeTimer); t.dead = true; t.el.remove(); });
+    targets.length = 0;
+  }, 900);
+  if (window.s2Banner) s2Banner('STAGE 2 // ENTERING DEEP SPACE');
+  preloadStage2()
+    .then(() => setTimeout(startStage2, 1100))   // let the wind-down play out
+    .catch(() => { /* three.min.js failed to load — stay in the gallery */ });
 }
 
 // === STREAK ===
@@ -1099,6 +1589,11 @@ function showStreakPopup(count) {
   const el = document.createElement('div');
   el.className = 'streak-popup';
   el.textContent = msg;
+  // Pop from where the shot landed (just above the crosshair), not mid-screen
+  const px = Math.max(150, Math.min(VW - 150, mouseX > -1000 ? mouseX : VW / 2));
+  const py = Math.max(90,  Math.min(VH - 90, (mouseY > -1000 ? mouseY : VH * 0.45) - 60));
+  el.style.left = px + 'px';
+  el.style.top  = py + 'px';
   document.body.appendChild(el);
   setTimeout(() => el.remove(), 1700);
 }

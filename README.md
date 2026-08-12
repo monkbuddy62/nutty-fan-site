@@ -2,6 +2,9 @@
 
 Photos and videos of Nutty float around the screen. You shoot them. A Nutty audio clip plays on every kill.
 
+How everything works is documented in [`specs/`](specs/00-overview.md) — read the relevant spec
+before changing behavior, and update it in the same commit.
+
 ## Adding media
 
 ### Step 1 — Windows (where your files are)
