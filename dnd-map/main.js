@@ -172,7 +172,47 @@ let scale = 1;
 let viewX = 0;
 let viewY = 0;
 
+// pnutsuxnuts.com/dnd-map patch 2: composited gestures (specs/dnd-map.md).
+// Re-transforming #viewbox repaints every path, label and icon in the map, so a pinch
+// or drag that does it each frame stutters on a phone. Instead, while the view moves,
+// a wrapper <div> around the <svg> slides it as one cached GPU layer under a CSS
+// transform (a transform on the <svg> itself still repaints it); the SVG is
+// re-transformed ("committed") only when the gesture ends or rests, zooms far enough
+// that the cached picture would blur, or drags far enough to bare the screen's edge.
+const GESTURE_REST_MS = 150; // a view held still this long gets a sharp redraw
+const GESTURE_MIN_SCALE = 0.7; // zooming out past this, relative to the last commit, commits
+const GESTURE_MAX_SCALE = 2; // zooming in past this commits, before the picture blurs
+const GESTURE_MAX_SHIFT = 0.35; // dragging further than this share of the screen commits
+
+const gestureLayer = document.createElement("div");
+gestureLayer.id = "gestureLayer";
+gestureLayer.style.cssText = "position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform";
+// Loading a map swaps in a new <svg> at the top of <body>; take each one in as it arrives.
+function adoptMap() {
+  const map = document.getElementById("map");
+  if (!map || map.parentNode === gestureLayer) return;
+  map.before(gestureLayer);
+  gestureLayer.append(map);
+  // d3 reads pointers against the <svg>'s screen matrix, which the slide would skew;
+  // report the matrix the <svg> had when last still. Exactly that one: d3 re-anchors a
+  // wheel zoom whenever the pointer reads differently, so even rounding would show.
+  let stillCTM = null;
+  map.getScreenCTM = function () {
+    const {s, x, y} = layerShift;
+    if (s === 1 && !x && !y) return (stillCTM = SVGSVGElement.prototype.getScreenCTM.call(this));
+    if (stillCTM) return stillCTM;
+    const ctm = SVGSVGElement.prototype.getScreenCTM.call(this);
+    return this.createSVGMatrix().translate(x, y).scale(s).inverse().multiply(ctm);
+  };
+}
+adoptMap();
+new MutationObserver(adoptMap).observe(document.body, {childList: true});
+
 let rafId = null;
+let restTimer = null;
+let layerShift = {s: 1, x: 0, y: 0}; // the CSS transform on gestureLayer right now
+let committed = {k: 1, x: 0, y: 0}; // the transform #viewbox actually carries
+let committedMap = null; // loading a map replaces the <svg>, and with it that transform
 let pendingScaleChange = false;
 let pendingPositionChange = false;
 function zoomRaf() {
@@ -196,45 +236,76 @@ function zoomRaf() {
   rafId = requestAnimationFrame(() => {
     rafId = null;
 
-    // Safely clears these flags for future renders
-    const didScaleChange = pendingScaleChange;
-    const didPositionChange = pendingPositionChange;
-    pendingScaleChange = false;
-    pendingPositionChange = false;
+    const relative = scale / committed.k;
+    const tx = viewX - relative * committed.x;
+    const ty = viewY - relative * committed.y;
+    const farOut = relative < GESTURE_MIN_SCALE || relative > GESTURE_MAX_SCALE;
+    const farOver = Math.abs(tx) > svgWidth * GESTURE_MAX_SHIFT || Math.abs(ty) > svgHeight * GESTURE_MAX_SHIFT;
+    if (svg.node() !== committedMap || farOut || farOver) return commitZoom();
 
-    // Uses global values, so each frame always draws using the latest positioning values
-    viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
+    layerShift = {s: relative, x: tx, y: ty};
+    gestureLayer.style.transform = `translate(${tx}px, ${ty}px) scale(${relative})`;
 
-    if (didPositionChange) {
-      if (layerIsOn("toggleCoordinates")) drawCoordinates();
-    }
+    if (customization === 1) drawCustomizationCanvas();
 
-    if (customization === 1) {
-      const canvas = ensureEl("canvas");
-      if (canvas && canvas.style.opacity !== "0") {
-        const img = ensureEl("imageToConvert");
-        if (img) {
-          const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.setTransform(scale, 0, 0, scale, viewX, viewY);
-          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        }
-      }
-    }
-
-    if (didScaleChange) {
-      invokeActiveZooming();
-      drawScaleBar(scaleBar, scale);
-      fitScaleBar(scaleBar, svgWidth, svgHeight);
-    }
-
-    if (didPositionChange || didScaleChange) {
-      window.updateMinimap && updateMinimap();
-    }
+    clearTimeout(restTimer);
+    restTimer = setTimeout(commitZoom, GESTURE_REST_MS);
   });
 }
 
-const zoom = d3.zoom().scaleExtent([1, 20]).on("zoom", zoomRaf);
+function commitZoom() {
+  clearTimeout(restTimer);
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = null;
+
+  const didScaleChange = pendingScaleChange;
+  const didPositionChange = pendingPositionChange;
+  pendingScaleChange = false;
+  pendingPositionChange = false;
+
+  committed = {k: scale, x: viewX, y: viewY};
+  committedMap = svg.node();
+  viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
+  layerShift = {s: 1, x: 0, y: 0};
+  gestureLayer.style.transform = "";
+  // what shows past the map's own edge while the next gesture slides it
+  document.body.style.backgroundColor = svg.style("background-color");
+
+  if (didPositionChange) {
+    if (layerIsOn("toggleCoordinates")) drawCoordinates();
+  }
+
+  if (customization === 1) drawCustomizationCanvas();
+
+  if (didScaleChange) {
+    invokeActiveZooming();
+    drawScaleBar(scaleBar, scale);
+    fitScaleBar(scaleBar, svgWidth, svgHeight);
+  }
+
+  if (didPositionChange || didScaleChange) {
+    window.updateMinimap && updateMinimap();
+  }
+}
+
+function drawCustomizationCanvas() {
+  const canvas = ensureEl("canvas");
+  if (canvas && canvas.style.opacity !== "0") {
+    const img = ensureEl("imageToConvert");
+    if (img) {
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.setTransform(scale, 0, 0, scale, viewX, viewY);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    }
+  }
+}
+
+const zoom = d3
+  .zoom()
+  .scaleExtent([1, 20])
+  .on("zoom", zoomRaf)
+  .on("end", () => (pendingScaleChange || pendingPositionChange) && commitZoom());
 
 var mapCoordinates = {}; // map coordinates on globe
 let populationRate = +ensureEl("populationRateInput").value;
@@ -322,9 +393,10 @@ async function checkLoadParameters() {
     const pattern = /(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?/;
     const valid = pattern.test(maplink);
     if (valid) {
+      // pnutsuxnuts.com/dnd-map patch 3: no 1s wait before the map download (specs/dnd-map.md)
       setTimeout(() => {
         loadMapFromURL(maplink, 1);
-      }, 1000);
+      }, 0);
       return;
     } else showUploadErrorMessage("Map link is not a valid URL", maplink);
   }

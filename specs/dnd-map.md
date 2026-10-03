@@ -16,7 +16,7 @@ automatically and outlive whatever upstream does next.
 |---|---|
 | Upstream | [Azgaar/Fantasy-Map-Generator](https://github.com/Azgaar/Fantasy-Map-Generator), MIT |
 | Version | **1.122.12** (`dnd-map/versioning.js`) |
-| Built with | `base=/dnd-map/` — absolute paths, so it only works at that path |
+| Built with | `base=/dnd-map/`; patch 5 makes its two absolute paths relative, so it serves from any path (the fork previews at `/nutty-fan-site/dnd-map/`) |
 | Vendored in | commit `67c0862` |
 | Size | 636 files, ~30 MB |
 
@@ -40,6 +40,51 @@ if (!params.get("maplink") && !params.get("seed")) {
 Inside `checkLoadParameters()`. With no query string, FMG would generate a random world; this makes
 `rugby.map` the default while leaving `?maplink=` and `?seed=` working for anyone who wants
 something else.
+
+### 2. `main.js` zoom block — composited gestures
+
+The zoom handler (`zoomRaf`, `commitZoom`, `adoptMap`, the `GESTURE_*` constants) replaces upstream's
+`zoomRaf`. Upstream re-transforms `#viewbox` on every frame of a pinch or drag, which repaints the
+whole map — ~4,700 SVG nodes — each frame. Instead:
+
+- A `<div id="gestureLayer">` wraps `<svg id="map">` (re-wrapped by a `MutationObserver` whenever a
+  map load swaps in a new `<svg>`). While the view moves, only this div's CSS `transform` changes,
+  which the GPU composites from the cached picture with no repaint. A transform on the `<svg>`
+  itself does not work: browsers repaint the SVG for it.
+- The real `#viewbox` transform is **committed** — with upstream's per-zoom work (label rescale,
+  markers, scale bar, minimap, coordinates) — when the gesture ends, rests for
+  `GESTURE_REST_MS` (150 ms), zooms past `GESTURE_MIN_SCALE` 0.7× / `GESTURE_MAX_SCALE` 2× of the
+  last commit (beyond which the cached picture blurs or bares the edges), or drags more than
+  `GESTURE_MAX_SHIFT` 35% of the screen (beyond which blank map would slide in).
+- The `<svg>`'s `getScreenCTM` is overridden to return its matrix from when it was last still.
+  d3 reads pointers through it; without that, the slide feeds back into the gesture and a pinch
+  zooms half as far. It must return the *identical* matrix, not a recomputed one — d3 re-anchors a
+  wheel zoom whenever the pointer reads differently, and float rounding is enough.
+
+The cost of the trade: mid-pinch the map is a scaled picture, slightly soft, sharpening on release.
+
+Measured on a simulated phone (Chromium, 390×844 @3×, CPU throttled 4×), main-thread time per
+finger move: pinch 143 → 36 ms, drag 40 → 24 ms; 90th-percentile frame 50–67 → 16.7 ms. Every
+gesture ends on the identical transform as upstream, checked in Chromium and WebKit.
+
+### 3. `main.js` `checkLoadParameters()` — no 1 s wait
+
+Upstream waits `setTimeout(…, 1000)` before fetching a `?maplink=` map. It runs on
+`DOMContentLoaded`, after every script has executed, so the wait guards nothing; now `0`.
+Map on screen: 2.7 → 1.8 s on a fast connection. (A `<link rel="preload">` of `rugby.map` was
+tried and measured worse — it starves the scripts on slow connections.)
+
+### 4. `index.html` — Azgaar Assistant defaults to Hide
+
+The Options → "Azgaar assistant" select defaults to `hide`. Shown, it loads the OpenWidget support
+chat (~320 KB, 15 requests) a few seconds into every visit and parks a bubble over the map. Still
+one click away in Options; a stored choice wins.
+
+### 5. `index.html` — relative bundle paths, and `main.js`'s cache key
+
+`./index-CT-LUFbs.js` and `./index-B3l7mx48.css` instead of `/dnd-map/…`, so the copy works at any
+path. `main.js` loads as `?v=1.120.5-nutty2`: bump the suffix whenever a patch changes `main.js`, or
+the service worker serves the old one for a visit (see below).
 
 **That is the entire delta.** Everything else under `dnd-map/` is stock.
 
@@ -70,7 +115,7 @@ export from FMG will have them back on.
 
 ### Re-vendoring
 
-1. Build upstream at the target version with `base=/dnd-map/`.
+1. Build upstream at the target version (`base=/dnd-map/` or `./`).
 2. Replace `dnd-map/` wholesale, keeping `rugby.map`.
 3. Re-apply every patch in the list above; `checkLoadParameters()` may have moved.
 4. Verify: `http://localhost:8000/dnd-map/` with no query string loads the campaign map.
@@ -99,7 +144,7 @@ cache-busting (see [deployment.md](deployment.md)):
 | Request | Strategy | Consequence |
 |---|---|---|
 | Navigation (`index.html`) | NetworkFirst, 15s timeout | HTML stays fresh. |
-| Scripts, incl. `main.js` | **StaleWhileRevalidate**, 30 days | **A patch to `main.js` serves stale once** — returning visitors get the old copy on the visit after you deploy, and the new one the visit after that. |
+| Scripts, incl. `main.js` | **StaleWhileRevalidate**, 30 days | **A patch to `main.js` serves stale once** unless its `?v=` changes — hence patch 5's suffix. |
 | Stylesheets, `*.min.js` libs | CacheFirst, 30 days | Fine; they only change on a re-vendor. |
 | `*.json`, images, `*.svg`, fonts | CacheFirst, 30–60 days | Fine; static assets. |
 | **`rugby.map`** | **no matching route** | Not cached by the worker. Map updates reach players on the next load. |

@@ -66,7 +66,7 @@ See `specs/media-pipeline.md`.
 
 ## Don't hand-edit `dnd-map/`
 
-636 files of vendored upstream code. It has exactly **one** local patch, recorded in
+636 files of vendored upstream code. It has a short, numbered list of local patches, recorded in
 `specs/dnd-map.md`. If you must patch it again, append to that list — an unrecorded patch is lost
 the next time the directory is re-vendored.
 
