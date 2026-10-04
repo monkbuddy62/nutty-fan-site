@@ -343,6 +343,19 @@ function commitZoom() {
   gesturePerf?.commit(commitStart);
 }
 
+// pnutsuxnuts.com/dnd-map patch 5: the build on screen, drawn by this file so a stale cached
+// main.js shows its own (older) number. Bump with main.js's ?v= suffix in index.html.
+const DND_MAP_BUILD = 3;
+{
+  const tag = document.createElement("div");
+  tag.id = "dndMapBuild";
+  tag.textContent = `map build ${DND_MAP_BUILD}`;
+  tag.style.cssText =
+    "position:fixed;left:4px;bottom:4px;z-index:100000;padding:2px 5px;font:11px/1.3 monospace;" +
+    "color:#fff;background:rgba(0,0,0,.5);border-radius:3px;pointer-events:none";
+  document.body.append(tag);
+}
+
 // ?perf on the URL: a readout of each gesture's frames and commits, for measuring on a phone.
 const gesturePerf = new URLSearchParams(location.search).has("perf") ? createGesturePerf() : null;
 function createGesturePerf() {
@@ -367,7 +380,7 @@ function createGesturePerf() {
     const pct = q => (n ? f[Math.min(n - 1, Math.floor(n * q))].toFixed(0) : "-");
     const slow = f.filter(d => d > 34).length;
     box.textContent =
-      `${label}: ${n} frames\nmedian ${pct(0.5)} ms, p90 ${pct(0.9)} ms, worst ${pct(1)} ms\n` +
+      `build ${DND_MAP_BUILD} ${label}: ${n} frames\nmedian ${pct(0.5)} ms, p90 ${pct(0.9)} ms, worst ${pct(1)} ms\n` +
       `slow (>34 ms): ${slow}\ncommits: ${commits.map(c => c.toFixed(0)).join(", ") || "none"} ms`;
   }
   return {

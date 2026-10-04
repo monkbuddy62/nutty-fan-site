@@ -100,8 +100,13 @@ one click away in Options; a stored choice wins.
 ### 5. `index.html` — relative bundle paths, and `main.js`'s cache key
 
 `./index-CT-LUFbs.js` and `./index-B3l7mx48.css` instead of `/dnd-map/…`, so the copy works at any
-path. `main.js` loads as `?v=1.120.5-nutty3`: bump the suffix whenever a patch changes `main.js`, or
-the service worker serves the old one for a visit (see below).
+path.
+
+**The build number.** `main.js` draws a small **"map build N"** label at the bottom-left, from its
+`DND_MAP_BUILD` constant, and `index.html` loads it as `main.js?v=1.120.5-nutty-bN`. Bump both
+together on every change to `main.js` — the `?v=` change gets past the CDN and the service worker
+(see below), and the label shows which `main.js` a phone is really running: a stale copy shows its
+own older number, and builds before 3 show none.
 
 **That is the entire delta.** Everything else under `dnd-map/` is stock.
 
