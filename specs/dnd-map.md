@@ -43,29 +43,46 @@ something else.
 
 ### 2. `main.js` zoom block — composited gestures
 
-The zoom handler (`zoomRaf`, `commitZoom`, `adoptMap`, the `GESTURE_*` constants) replaces upstream's
-`zoomRaf`. Upstream re-transforms `#viewbox` on every frame of a pinch or drag, which repaints the
-whole map — ~4,700 SVG nodes — each frame. Instead:
+The zoom block (`zoomRaf`, `commitZoom`, `adoptMap`, `padGestureLayer`, `pictureCovers`, the
+`GESTURE_*` constants, `gesturePerf`) replaces upstream's `zoomRaf`. Upstream re-transforms
+`#viewbox` on every frame of a pinch or drag, which repaints the whole map — ~4,700 SVG nodes —
+each frame. Instead:
 
-- A `<div id="gestureLayer">` wraps `<svg id="map">` (re-wrapped by a `MutationObserver` whenever a
-  map load swaps in a new `<svg>`). While the view moves, only this div's CSS `transform` changes,
-  which the GPU composites from the cached picture with no repaint. A transform on the `<svg>`
-  itself does not work: browsers repaint the SVG for it.
-- The real `#viewbox` transform is **committed** — with upstream's per-zoom work (label rescale,
-  markers, scale bar, minimap, coordinates) — when the gesture ends, rests for
-  `GESTURE_REST_MS` (150 ms), zooms past `GESTURE_MIN_SCALE` 0.7× / `GESTURE_MAX_SCALE` 2× of the
-  last commit (beyond which the cached picture blurs or bares the edges), or drags more than
-  `GESTURE_MAX_SHIFT` 35% of the screen (beyond which blank map would slide in).
-- The `<svg>`'s `getScreenCTM` is overridden to return its matrix from when it was last still.
-  d3 reads pointers through it; without that, the slide feeds back into the gesture and a pinch
-  zooms half as far. It must return the *identical* matrix, not a recomputed one — d3 re-anchors a
-  wheel zoom whenever the pointer reads differently, and float rounding is enough.
+- **The map slides as one cached picture.** `<div id="gestureClip">` (screen-sized, clips) holds
+  `<div id="gestureLayer">` (`will-change: transform`), which holds `<svg id="map">`. While the view
+  moves, only `gestureLayer`'s CSS `transform` changes, which the GPU composites with no repaint.
+  A transform on the `<svg>` itself does not work: browsers repaint the SVG for it. WebKit keeps
+  such a layer's bitmap at its original scale while it scales (`GraphicsLayerCA::
+  updateRootRelativeScale` returns early by default), so a pinch is soft until the commit.
+- **It carries a margin.** `gestureLayer` reaches `GESTURE_PAD` (1) screen past every edge, with
+  the `<svg>` (`overflow: visible`) in its middle, so a drag uncovers map drawn ahead of time. The
+  clip must stay: a box sticking out past the screen makes a phone browser widen the page, which FMG
+  then reads as a bigger screen (`svgWidth`), breaking the zoom clamp. The margin follows the
+  `<svg>`'s `width`/`height` through a `MutationObserver`; a size in `%` is pinned to px first, or it
+  would resolve against the larger wrapper.
+- **Commits are rare, because each is a full repaint.** The real `#viewbox` transform — with
+  upstream's per-zoom work (label rescale, markers, scale bar, minimap, coordinates) — is
+  committed `GESTURE_SETTLE_MS` (120) after release (a new gesture that soon keeps the picture), after
+  `GESTURE_REST_MS` (500) held still, or when `pictureCovers()` says the picture plus margin no
+  longer covers the screen (a drag past one screen, a zoom-out past ⅓). Build 1 of this patch also
+  committed past 2× / 0.7× / a third of a screen; that put 4–5 full repaints inside every gesture
+  and was not smooth on an iPhone.
+- **d3's pointer math is kept still.** The `<svg>`'s `getScreenCTM` is overridden to return the
+  matrix from when it was last still. d3 reads pointers through it; without that, the slide feeds
+  back into the gesture and a pinch zooms half as far. It must return the *identical* matrix, not a
+  recomputed one — d3 re-anchors a wheel zoom whenever the pointer reads differently, and float
+  rounding is enough.
+- **A newly loaded map is adopted as committed**, its `#viewbox` transform read back, so its first
+  gesture does not start with a repaint.
+- **`?perf`** on the URL shows a readout per gesture: frames, median/p90/worst frame time, frames over
+  34 ms, and each commit's time to the next frame. It is how this is measured on a phone; the dev
+  box has no iPhone.
 
-The cost of the trade: mid-pinch the map is a scaled picture, slightly soft, sharpening on release.
+The scale bar and vignette ride along with the picture mid-gesture and snap back at the commit.
 
-Measured on a simulated phone (Chromium, 390×844 @3×, CPU throttled 4×), main-thread time per
-finger move: pinch 143 → 36 ms, drag 40 → 24 ms; 90th-percentile frame 50–67 → 16.7 ms. Every
-gesture ends on the identical transform as upstream, checked in Chromium and WebKit.
+Measured on a simulated phone (Chromium, 390×844 @3×, CPU throttled 4×): mid-gesture commits per
+pinch or long drag 4–5 → 0; main-thread time per finger move: pinch 143 → 26 ms, drag 40 → 17 ms.
+Every gesture ends on the identical transform as upstream, checked in Chromium and WebKit.
 
 ### 3. `main.js` `checkLoadParameters()` — no 1 s wait
 
@@ -83,7 +100,7 @@ one click away in Options; a stored choice wins.
 ### 5. `index.html` — relative bundle paths, and `main.js`'s cache key
 
 `./index-CT-LUFbs.js` and `./index-B3l7mx48.css` instead of `/dnd-map/…`, so the copy works at any
-path. `main.js` loads as `?v=1.120.5-nutty2`: bump the suffix whenever a patch changes `main.js`, or
+path. `main.js` loads as `?v=1.120.5-nutty3`: bump the suffix whenever a patch changes `main.js`, or
 the service worker serves the old one for a visit (see below).
 
 **That is the entire delta.** Everything else under `dnd-map/` is stock.

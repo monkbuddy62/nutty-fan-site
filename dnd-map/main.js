@@ -176,23 +176,69 @@ let viewY = 0;
 // Re-transforming #viewbox repaints every path, label and icon in the map, so a pinch
 // or drag that does it each frame stutters on a phone. Instead, while the view moves,
 // a wrapper <div> around the <svg> slides it as one cached GPU layer under a CSS
-// transform (a transform on the <svg> itself still repaints it); the SVG is
-// re-transformed ("committed") only when the gesture ends or rests, zooms far enough
-// that the cached picture would blur, or drags far enough to bare the screen's edge.
-const GESTURE_REST_MS = 150; // a view held still this long gets a sharp redraw
-const GESTURE_MIN_SCALE = 0.7; // zooming out past this, relative to the last commit, commits
-const GESTURE_MAX_SCALE = 2; // zooming in past this commits, before the picture blurs
-const GESTURE_MAX_SHIFT = 0.35; // dragging further than this share of the screen commits
+// transform (a transform on the <svg> itself still repaints it). The wrapper carries a
+// margin of map drawn past every screen edge, so a drag uncovers real map. The SVG is
+// re-transformed ("committed") only once the gesture is over or held still, or when the
+// cached picture would no longer cover the screen: a commit is a full repaint, and one
+// mid-gesture is the stutter this patch exists to remove.
+const GESTURE_PAD = 1; // screens of map drawn past each edge
+const GESTURE_REST_MS = 500; // a pinch or drag held still this long gets a sharp redraw
+const GESTURE_SETTLE_MS = 120; // after release; another gesture this soon keeps the picture
+
+let rafId = null;
+let restTimer = null;
+let layerShift = {s: 1, x: 0, y: 0}; // the CSS transform on gestureLayer right now
+let committed = {k: 1, x: 0, y: 0}; // the transform #viewbox actually carries
+let committedMap = null; // loading a map replaces the <svg>, and with it that transform
 
 const gestureLayer = document.createElement("div");
 gestureLayer.id = "gestureLayer";
-gestureLayer.style.cssText = "position:absolute;left:0;top:0;transform-origin:0 0;will-change:transform";
+gestureLayer.style.cssText = "position:absolute;will-change:transform";
+// gestureLayer reaches past the screen; a screen-sized clip keeps it from widening the page,
+// which a phone browser would otherwise do (and FMG would read as a bigger screen).
+const gestureClip = document.createElement("div");
+gestureClip.id = "gestureClip";
+gestureClip.style.cssText = "position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden";
+gestureClip.append(gestureLayer);
+let padded = null; // the map size gestureLayer's margin was laid out for
+// gestureLayer reaches GESTURE_PAD screens past every edge and the <svg> sits in its middle,
+// so a drag reveals map drawn ahead of time rather than an empty edge.
+function padGestureLayer(map) {
+  const w = map.width.baseVal.value;
+  const h = map.height.baseVal.value;
+  if (padded && padded.w === w && padded.h === h) return;
+  padded = {w, h};
+  const padX = Math.round(w * GESTURE_PAD);
+  const padY = Math.round(h * GESTURE_PAD);
+  Object.assign(gestureLayer.style, {
+    overflow: "hidden",
+    left: `${-padX}px`,
+    top: `${-padY}px`,
+    width: `${w + 2 * padX}px`,
+    height: `${h + 2 * padY}px`,
+    transformOrigin: `${padX}px ${padY}px`
+  });
+  Object.assign(map.style, {left: `${padX}px`, top: `${padY}px`});
+}
 // Loading a map swaps in a new <svg> at the top of <body>; take each one in as it arrives.
 function adoptMap() {
   const map = document.getElementById("map");
   if (!map || map.parentNode === gestureLayer) return;
-  map.before(gestureLayer);
+  // a size in % would resolve against gestureLayer, which is larger; pin it in px first
+  const {width, height} = map.getBoundingClientRect();
+  if (map.width.baseVal.unitType === SVGLength.SVG_LENGTHTYPE_PERCENTAGE) map.setAttribute("width", width);
+  if (map.height.baseVal.unitType === SVGLength.SVG_LENGTHTYPE_PERCENTAGE) map.setAttribute("height", height);
+  map.before(gestureClip);
   gestureLayer.append(map);
+  map.style.overflow = "visible"; // draws into gestureLayer's margin, which clips it
+  padded = null;
+  padGestureLayer(map);
+  // FMG sizes the <svg> to the screen after a load, and again on resize
+  new MutationObserver(() => padGestureLayer(map)).observe(map, {attributeFilter: ["width", "height"]});
+  // take the new map's transform as committed, so its first gesture doesn't redraw it
+  const matrix = map.querySelector("#viewbox")?.transform.baseVal.consolidate()?.matrix;
+  committed = matrix ? {k: matrix.a, x: matrix.e, y: matrix.f} : {k: 1, x: 0, y: 0};
+  committedMap = map;
   // d3 reads pointers against the <svg>'s screen matrix, which the slide would skew;
   // report the matrix the <svg> had when last still. Exactly that one: d3 re-anchors a
   // wheel zoom whenever the pointer reads differently, so even rounding would show.
@@ -208,11 +254,6 @@ function adoptMap() {
 adoptMap();
 new MutationObserver(adoptMap).observe(document.body, {childList: true});
 
-let rafId = null;
-let restTimer = null;
-let layerShift = {s: 1, x: 0, y: 0}; // the CSS transform on gestureLayer right now
-let committed = {k: 1, x: 0, y: 0}; // the transform #viewbox actually carries
-let committedMap = null; // loading a map replaces the <svg>, and with it that transform
 let pendingScaleChange = false;
 let pendingPositionChange = false;
 function zoomRaf() {
@@ -239,9 +280,7 @@ function zoomRaf() {
     const relative = scale / committed.k;
     const tx = viewX - relative * committed.x;
     const ty = viewY - relative * committed.y;
-    const farOut = relative < GESTURE_MIN_SCALE || relative > GESTURE_MAX_SCALE;
-    const farOver = Math.abs(tx) > svgWidth * GESTURE_MAX_SHIFT || Math.abs(ty) > svgHeight * GESTURE_MAX_SHIFT;
-    if (svg.node() !== committedMap || farOut || farOver) return commitZoom();
+    if (svg.node() !== committedMap || !pictureCovers(relative, tx, ty)) return commitZoom();
 
     layerShift = {s: relative, x: tx, y: ty};
     gestureLayer.style.transform = `translate(${tx}px, ${ty}px) scale(${relative})`;
@@ -253,7 +292,21 @@ function zoomRaf() {
   });
 }
 
+// Whether the cached picture, margin included, still covers the whole screen.
+function pictureCovers(relative, tx, ty) {
+  const {w, h} = padded;
+  const padX = w * GESTURE_PAD;
+  const padY = h * GESTURE_PAD;
+  return (
+    tx - padX * relative <= 0 &&
+    ty - padY * relative <= 0 &&
+    tx + (w + padX) * relative >= w &&
+    ty + (h + padY) * relative >= h
+  );
+}
+
 function commitZoom() {
+  const commitStart = performance.now();
   clearTimeout(restTimer);
   if (rafId) cancelAnimationFrame(rafId);
   rafId = null;
@@ -268,8 +321,9 @@ function commitZoom() {
   viewbox.attr("transform", `translate(${viewX} ${viewY}) scale(${scale})`);
   layerShift = {s: 1, x: 0, y: 0};
   gestureLayer.style.transform = "";
-  // what shows past the map's own edge while the next gesture slides it
-  document.body.style.backgroundColor = svg.style("background-color");
+  // what shows past the map's own edge
+  gestureLayer.style.backgroundColor = svg.style("background-color");
+  padGestureLayer(svg.node());
 
   if (didPositionChange) {
     if (layerIsOn("toggleCoordinates")) drawCoordinates();
@@ -286,6 +340,58 @@ function commitZoom() {
   if (didPositionChange || didScaleChange) {
     window.updateMinimap && updateMinimap();
   }
+  gesturePerf?.commit(commitStart);
+}
+
+// ?perf on the URL: a readout of each gesture's frames and commits, for measuring on a phone.
+const gesturePerf = new URLSearchParams(location.search).has("perf") ? createGesturePerf() : null;
+function createGesturePerf() {
+  const box = document.createElement("div");
+  box.style.cssText =
+    "position:fixed;right:4px;top:4px;z-index:100000;padding:4px 6px;font:11px/1.35 monospace;" +
+    "background:rgba(0,0,0,.75);color:#fff;white-space:pre;pointer-events:none";
+  box.textContent = "perf: waiting for a gesture";
+  document.body.append(box);
+  let frames = null;
+  let commits = [];
+  let last = 0;
+  function tick(now) {
+    if (!frames) return;
+    frames.push(now - last);
+    last = now;
+    requestAnimationFrame(tick);
+  }
+  function report(label) {
+    const f = frames.slice(1).sort((a, b) => a - b);
+    const n = f.length;
+    const pct = q => (n ? f[Math.min(n - 1, Math.floor(n * q))].toFixed(0) : "-");
+    const slow = f.filter(d => d > 34).length;
+    box.textContent =
+      `${label}: ${n} frames\nmedian ${pct(0.5)} ms, p90 ${pct(0.9)} ms, worst ${pct(1)} ms\n` +
+      `slow (>34 ms): ${slow}\ncommits: ${commits.map(c => c.toFixed(0)).join(", ") || "none"} ms`;
+  }
+  return {
+    start() {
+      if (frames) return;
+      frames = [];
+      commits = [];
+      last = performance.now();
+      requestAnimationFrame(tick);
+    },
+    end() {
+      if (!frames) return;
+      // keep counting through the settle commit, then report
+      setTimeout(() => {
+        report("gesture");
+        frames = null;
+      }, GESTURE_SETTLE_MS + 400);
+    },
+    commit(started) {
+      const sync = performance.now() - started;
+      requestAnimationFrame(() => commits.push(performance.now() - started));
+      if (!frames) box.textContent += `\nlate commit ${sync.toFixed(0)} ms (script)`;
+    }
+  };
 }
 
 function drawCustomizationCanvas() {
@@ -304,8 +410,14 @@ function drawCustomizationCanvas() {
 const zoom = d3
   .zoom()
   .scaleExtent([1, 20])
+  .on("start", () => gesturePerf?.start())
   .on("zoom", zoomRaf)
-  .on("end", () => (pendingScaleChange || pendingPositionChange) && commitZoom());
+  .on("end", () => {
+    gesturePerf?.end();
+    if (!pendingScaleChange && !pendingPositionChange) return;
+    clearTimeout(restTimer);
+    restTimer = setTimeout(commitZoom, GESTURE_SETTLE_MS);
+  });
 
 var mapCoordinates = {}; // map coordinates on globe
 let populationRate = +ensureEl("populationRateInput").value;
