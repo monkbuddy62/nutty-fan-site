@@ -8,12 +8,25 @@ Two independent things served from one GitHub Pages site at **pnutsuxnuts.com**:
    you into the Suess slash-combo duel, and beating him leads into the final phase: a DDR-style
    dance-off against Patticus Maximus. `index.html` + `script.js` (gallery + Jake) +
    `stage2.js` (3D stage) + `suess.js` (the duel) + `stage3.js` (dance-off) + `style.css`.
-2. **The campaign map** (`/dnd-map/`) — a vendored copy of Azgaar's Fantasy Map Generator that
-   auto-loads one D&D campaign map.
+2. **The campaign map** — two parts sharing one map (`dnd-map/rugby.map`):
+   - **`/dnd-view/`, the player viewer**: the map as pre-rendered WebP tiles in one WebGL canvas
+     (vendored MapLibre GL JS 6.12.0), with taps that open an info card. Plain `/dnd-map/` redirects
+     here. See `specs/dnd-view.md`.
+   - **`/dnd-map/?edit`, the editor**: a vendored copy of Azgaar's Fantasy Map Generator that
+     auto-loads the campaign map. See `specs/dnd-map.md`.
 
-No build step, no package.json, no test suite. The one dependency is a vendored
+No build step, no package.json at the root, no test suite. The one dependency is a vendored
 `libs/three.min.js` (r140 UMD), lazy-loaded only when stage 2 is reached. Edit files, commit,
 push; Pages serves the change in about 60 seconds.
+
+**The one exception is `map-build/`**: a Node + Playwright tool that drives FMG to pre-render the
+viewer's tiles into `dnd-view/t/<mapHash>/` and `dnd-view/meta.js`. Its output is committed and
+served as-is. The `dnd-tiles` Action reruns it on `master` when `dnd-map/` (the map or FMG) or
+`map-build/` changes (only once Actions are enabled on the fork); until then, after changing either,
+rebuild locally with the recipe in `specs/deployment.md` (it needs `npx playwright install chromium`
+once per machine; 6-10 min on 2 cores) and commit the output in the same commit.
+`node build-map-tiles.mjs --check` says whether the tiles are current. Never hand-edit
+`dnd-view/t/**` or `dnd-view/meta.js`.
 
 ## Specs are the source of truth
 
@@ -38,6 +51,11 @@ adding a stage adds a place:
 <script src="stage3.js?v=28"></script>           <!-- line 64 -->
 <script src="suess.js?v=28"></script>            <!-- line 65 -->
 ```
+
+The campaign map has its own number, the **map build number** (currently 4), shared by both parts:
+bump FMG's `DND_MAP_BUILD` and its `-nutty-bN` query strings (`specs/dnd-map.md`) and, in
+`dnd-view/index.html`, the `?v=N` on `meta.js`, `viewer.css` and `viewer.js` plus the "map build N"
+label, and `CACHE = "dnd-view-N"` in `dnd-view/sw.js` — all to the same N.
 
 This is the repo's only release mechanism. The query strings bust the Pages CDN cache; the
 `#buildId` text is how you tell which build a phone is actually running. Skip the bump and users
@@ -76,6 +94,9 @@ the next time the directory is re-vendored.
   `stage2.js` are plain `<script>` tags sharing one global scope; everything is a top-level
   `function` or `const`. `stage2.js` must never touch `THREE` at parse time — the library loads
   lazily.
+  `dnd-view/` follows the same rules with one exception: MapLibre 6 is ESM-only, so `index.html`
+  imports it in one inline `<script type="module">` that sets `window.maplibregl`; `viewer.js`
+  stays a classic deferred script.
 - **Config block at the top.** Tunable constants go in the `const` block at the head of each
   script, in SCREAMING_CASE, not inline at the use site.
 - **`// === SECTION ===` banners** separate subsystems in both `script.js` and `style.css`.

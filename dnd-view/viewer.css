@@ -1,0 +1,55 @@
+/* dnd-view - the player map viewer. The first paint's rules are inline in index.html; this sheet loads
+   without blocking it. */
+
+/* === MAPLIBRE ===
+   The handful of rules MapLibre's map needs from its own maplibre-gl.css (vendored beside the library,
+   83 KB, almost all of it control icons this viewer does not use). */
+.maplibregl-map { overflow: hidden; position: relative; -webkit-tap-highlight-color: rgb(0 0 0 / 0); -webkit-touch-callout: none; }
+.maplibregl-canvas { position: absolute; left: 0; top: 0; }
+.maplibregl-canvas:focus { outline: none; }
+.maplibregl-canvas-container.maplibregl-interactive { cursor: grab; -webkit-user-select: none; user-select: none; }
+.maplibregl-canvas-container.maplibregl-interactive:active { cursor: grabbing; }
+.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan,
+.maplibregl-canvas-container.maplibregl-touch-zoom-rotate.maplibregl-touch-drag-pan .maplibregl-canvas { touch-action: none; }
+.maplibregl-crosshair, .maplibregl-crosshair .maplibregl-interactive { cursor: crosshair; }
+.maplibregl-boxzoom { position: absolute; top: 0; left: 0; width: 0; height: 0; background: #fff; border: 2px dotted #202020; opacity: .5; }
+.maplibregl-control-container { display: none; }
+
+/* === NOTES === (no-WebGL message, stale-map note) */
+#note { position: fixed; z-index: 4; left: 50%; top: calc(12px + env(safe-area-inset-top)); transform: translateX(-50%);
+  max-width: calc(100% - 24px); box-sizing: border-box; padding: 8px 14px; border-radius: 10px;
+  font: 14px/1.35 -apple-system, system-ui, sans-serif; color: #fff; background: rgba(0, 0, 0, .72); text-align: center; }
+#note a { color: #ffd88a; }
+#note.big { top: 50%; transform: translate(-50%, -50%); padding: 18px 20px; font-size: 16px; }
+
+/* === PERF HUD === (?perf only) */
+#perf { position: fixed; z-index: 5; left: calc(4px + env(safe-area-inset-left)); top: calc(4px + env(safe-area-inset-top));
+  max-width: calc(100% - 120px); padding: 4px 6px; border-radius: 4px; pointer-events: none; contain: layout paint;
+  font: 10px/1.35 ui-monospace, Menlo, monospace; white-space: pre; color: #fff; background: rgba(0, 0, 0, .65); }
+
+/* === CARD === (what a tap picked: burg, marker, lake, area)
+   A sibling of #map, fixed: it takes only the touches inside its own box and never resizes the canvas.
+   Narrow screens: a bottom sheet over the safe area. Wide screens: a small panel top-left. */
+#card { position: fixed; z-index: 4; box-sizing: border-box; color: #1d1a16; background: rgba(250, 246, 236, .97);
+  font: 14px/1.4 -apple-system, system-ui, sans-serif; box-shadow: 0 2px 14px rgba(0, 0, 0, .35);
+  -webkit-user-select: text; user-select: text; overflow: auto; overscroll-behavior: contain; touch-action: pan-y; }
+#card[hidden] { display: none; }
+#card .h { font-size: 18px; font-weight: 600; line-height: 1.25; padding-right: 34px; overflow-wrap: anywhere; }
+#card .sub { color: #5e554a; margin-top: 2px; }
+#card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 10px 0 0; }
+#card dt { color: #776d60; }
+#card dd { margin: 0; overflow-wrap: anywhere; }
+#card dd.wide { grid-column: 1 / -1; white-space: pre-line; }
+#card .link { display: inline-block; margin-top: 10px; padding: 6px 12px; border-radius: 14px; color: #fff; background: #7a4b1c;
+  text-decoration: none; font-weight: 600; }
+#card .x { position: absolute; top: 6px; right: 6px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 18px;
+  font: 24px/36px -apple-system, system-ui, sans-serif; color: #5e554a; background: transparent; cursor: pointer; }
+#card .x:active { background: rgba(0, 0, 0, .08); }
+@media (max-width: 599px) {
+  #card { left: 0; right: 0; bottom: 0; max-height: 45vh; border-radius: 14px 14px 0 0;
+    padding: 14px calc(16px + env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
+}
+@media (min-width: 600px) {
+  #card { left: calc(12px + env(safe-area-inset-left)); top: calc(12px + env(safe-area-inset-top)); width: 300px;
+    max-height: calc(100% - 24px); padding: 14px 16px; border-radius: 10px; }
+}

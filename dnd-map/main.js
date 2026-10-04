@@ -345,7 +345,7 @@ function commitZoom() {
 
 // pnutsuxnuts.com/dnd-map patch 5: the build on screen, drawn by this file so a stale cached
 // main.js shows its own (older) number. Bump with main.js's ?v= suffix in index.html.
-const DND_MAP_BUILD = 3;
+const DND_MAP_BUILD = 4;
 {
   const tag = document.createElement("div");
   tag.id = "dndMapBuild";
@@ -423,9 +423,13 @@ function drawCustomizationCanvas() {
 const zoom = d3
   .zoom()
   .scaleExtent([1, 20])
-  .on("start", () => gesturePerf?.start())
+  .on("start", () => {
+    window.dndMapGesture = true; // patch 7: general.js skips hover tooltips while this is set
+    gesturePerf?.start();
+  })
   .on("zoom", zoomRaf)
   .on("end", () => {
+    window.dndMapGesture = false;
     gesturePerf?.end();
     if (!pendingScaleChange && !pendingPositionChange) return;
     clearTimeout(restTimer);

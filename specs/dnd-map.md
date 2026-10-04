@@ -2,13 +2,18 @@
 
 ## What it is
 
-`/dnd-map/` serves a self-hosted copy of **Azgaar's Fantasy Map Generator** that boots straight into
-one D&D campaign map (`rugby.map`) instead of generating a random world. Players get a full
-interactive map — pan, zoom, click a province, read the burg names — at a stable URL, with no
-account and nothing to install.
+`/dnd-map/?edit` is the DM's editor: a self-hosted copy of **Azgaar's Fantasy Map Generator** that
+boots straight into one D&D campaign map (`rugby.map`) instead of generating a random world — the
+full program, every layer and editor, at a stable URL with no account and nothing to install.
+
+Players do not use it. Plain `/dnd-map/` (no `edit`, `maplink` or `seed` in the query) redirects to
+the player viewer at `/dnd-view/` (patch 6), which shows the same map as pre-rendered tiles drawn
+by this copy of FMG — see [dnd-view.md](dnd-view.md). FMG's live SVG ran at about 1 fps on an
+iPhone; the viewer is what players pinch.
 
 Self-hosted rather than linked to azgaar.github.io because the campaign map has to load
-automatically and outlive whatever upstream does next.
+automatically, has to render the viewer's tiles (`map-build/` drives this copy), and has to
+outlive whatever upstream does next.
 
 ## Provenance
 
@@ -103,10 +108,46 @@ one click away in Options; a stored choice wins.
 path.
 
 **The build number.** `main.js` draws a small **"map build N"** label at the bottom-left, from its
-`DND_MAP_BUILD` constant, and `index.html` loads it as `main.js?v=1.120.5-nutty-bN`. Bump both
-together on every change to `main.js` — the `?v=` change gets past the CDN and the service worker
-(see below), and the label shows which `main.js` a phone is really running: a stale copy shows its
-own older number, and builds before 3 show none.
+`DND_MAP_BUILD` constant, and `index.html` loads it as `main.js?v=1.120.5-nutty-bN`. Every patched
+script carries the same suffix — since build 4 that is `main.js` and `modules/ui/general.js`
+(patch 7). Bump the constant and every `-nutty-bN` together on every change to a patched script —
+the `?v=` change gets past the CDN and the service worker (see below), and the label shows which
+`main.js` a phone is really running: a stale copy shows its own older number, and builds before 3
+show none. Currently **4**, shared with the player viewer's "map build 4" label.
+
+### 6. `index.html` — players go to the viewer; the DM opens `?edit`
+
+The first line of `<head>` is a one-line inline script: unless the query string has `edit`,
+`maplink` or `seed`, it calls `window.stop()` and `location.replace("../dnd-view/" + location.hash)`.
+
+Build 3 ran at about 1 fps on an iPhone — WebKit paints the live SVG into tiles on the main thread —
+so players now get the pre-rendered viewer at `/dnd-view/`, and this copy of FMG is the DM's
+editor at **`/dnd-map/?edit`**. `?edit` means nothing to FMG, so patch 1 still loads `rugby.map`;
+`?maplink=` and `?seed=` keep working as before. Any other query alone (`?perf`) redirects; use
+`?edit&perf`. The hash rides along, and `replace` keeps the bounce out of the back history.
+
+`window.stop()` is there for Chromium: its preload scanner reads ahead of the parser and starts
+FMG's ~70 scripts and stylesheets before this first line runs. Without it, 4 of them (114 KB)
+finished on a local server before the redirect; with it, 0 — all 71 are cancelled. WebKit starts
+none of them either way. FMG never rewrites its own URL (upstream's one `history.pushState` is
+commented out in `options.js`), so a reload of `?edit` stays in the editor.
+
+### 7. `modules/ui/general.js` — hover tooltips find their element again
+
+`showMapTooltip` worked out what is under the pointer by counting back from the **end** of
+`event.composedPath()` (`group = path[length - 7]`, `subgroup = path[length - 8]`, the burg at
+`length - 10`, a zone at `length - 8`). Patch 2's two wrapper divs (`gestureClip`, `gestureLayer`)
+sit between `<body>` and `<svg>` and shift every one of those by two, so since patch 2 the DM's
+tooltip on a burg, river or marker fell through to the area underneath (*"Culture: X"*). The
+indices now count from `#viewbox`'s own position in the path (`vb = path.findIndex(el => el.id ===
+"viewbox")`; group `vb - 1`, subgroup `vb - 2`, burg `vb - 4`), right with or without wrappers.
+
+Also, `handleMouseMove` (the 100 ms throttled `findCell` + tooltip `innerHTML`) returns at once
+while `window.dndMapGesture` is set. `main.js`'s d3 zoom sets it on `start` and clears it on
+`end` (in patch 2's `zoom` definition). A mouse drag never reached it — d3 swallows those
+`mousemove`s — but on a touchscreen FMG's `touchmove` listener on `#viewbox` fires before d3's on
+the `<svg>`, so a pinch ran the cell lookup every 100 ms. Measured over one scripted 40-move pinch:
+`findCell` calls 39 → 0 (WebKit, 390×844), 15 → 0 (Chromium with touch); the end view is unchanged.
 
 **That is the entire delta.** Everything else under `dnd-map/` is stock.
 
@@ -140,7 +181,7 @@ export from FMG will have them back on.
 1. Build upstream at the target version (`base=/dnd-map/` or `./`).
 2. Replace `dnd-map/` wholesale, keeping `rugby.map`.
 3. Re-apply every patch in the list above; `checkLoadParameters()` may have moved.
-4. Verify: `http://localhost:8000/dnd-map/` with no query string loads the campaign map.
+4. Verify: `http://localhost:8000/dnd-map/?edit` loads the campaign map, and `/dnd-map/` with no query string lands on `/dnd-view/`.
 
 Expect a large diff. The hashed bundle names (`index-CT-LUFbs.js`, `index-B3l7mx48.css`) change
 every build.
@@ -155,8 +196,11 @@ Neither is broken, both are wrong:
   not behave. Fixing it means editing a vendored file, so it needs a patch-list entry.
 - **`sw.js`** registers a Workbox service worker that imports its runtime from
   `storage.googleapis.com` — a third-party CDN dependency on every page load, and the one thing here
-  that can break from outside the repo. It only registers when the hostname isn't localhost, so it
-  is live on pnutsuxnuts.com and inert during local testing.
+  that can break from outside the repo. It only registers when the hostname isn't localhost, and a
+  browser only offers service workers in a secure context (https or localhost). The live hosts are
+  http only (pnutsuxnuts.com has no certificate of its own; [deployment.md](deployment.md) › Local
+  testing), so today it registers **nowhere**: not on the live site, not locally. The table below is
+  what it would do if the site moved to https.
 
 ### What the service worker caches
 
@@ -173,5 +217,6 @@ cache-busting (see [deployment.md](deployment.md)):
 
 `versioning.js` and anything path-matching `google` are explicitly excluded from script caching.
 
-So: map changes propagate immediately, patches to `main.js` take one extra visit. If a patch appears
-not to have deployed, load it once more before debugging.
+So, on https: map changes would propagate immediately and patches to `main.js` would take one extra
+visit. On today's http-only hosts the only cache is Pages' `max-age=600`: a patch whose `?v=` did
+not change can take up to 10 minutes to reach a phone.

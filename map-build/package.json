@@ -1,0 +1,14 @@
+{
+  "name": "dnd-map-build",
+  "private": true,
+  "description": "Pre-renders the campaign map (dnd-map/rugby.map) into the player viewer's WebP tile pyramid.",
+  "type": "module",
+  "scripts": {
+    "build": "node build-map-tiles.mjs",
+    "check": "node build-map-tiles.mjs --check",
+    "prune": "node build-map-tiles.mjs --prune"
+  },
+  "devDependencies": {
+    "playwright": "1.63.0"
+  }
+}
