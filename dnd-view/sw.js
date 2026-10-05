@@ -6,7 +6,7 @@
 // deletes every other dnd-view cache.
 
 // === CONFIG ===
-const CACHE = "dnd-view-5";          // libs/; each tile version has its own cache, CACHE + "/t/" + version
+const CACHE = "dnd-view-6";          // libs/; each tile version has its own cache, CACHE + "/t/" + version
 const CACHE_PREFIX = "dnd-view-";
 const TILE_CACHE_PREFIX = CACHE + "/t/";
 const SCOPE_PATH = new URL("./", self.location.href).pathname;   // .../dnd-view/

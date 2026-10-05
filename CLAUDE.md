@@ -52,7 +52,7 @@ adding a stage adds a place:
 <script src="suess.js?v=28"></script>            <!-- line 65 -->
 ```
 
-The campaign map has its own number, the **map build number** (currently 5), shared by both parts:
+The campaign map has its own number, the **map build number** (currently 6), shared by both parts:
 bump FMG's `DND_MAP_BUILD` and its `-nutty-bN` query strings (`specs/dnd-map.md`) and, in
 `dnd-view/index.html`, the `?v=N` on `meta.js`, `viewer.css` and `viewer.js` plus the "map build N"
 label, and `CACHE = "dnd-view-N"` in `dnd-view/sw.js` — all to the same N.
