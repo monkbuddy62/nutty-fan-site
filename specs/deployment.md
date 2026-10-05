@@ -102,14 +102,18 @@ localhost (the viewer's only registers on https), so local behaviour is cleaner 
 `python3 -m http.server` sends no ETag and no `Server: GitHub.com`, so the viewer's stale guard
 skips itself locally.
 
-The live hosts are **http only**: `https://pnutsuxnuts.com` presents GitHub's `*.github.io`
-certificate (no certificate for the custom domain), and `unsetbit.github.io` redirects to
-`http://unsetbit.com`. Browsers expose service workers only in a secure context, so on the live
-site neither FMG's Workbox worker nor the viewer's `sw.js` ever registers; caching is Pages'
+**pnutsuxnuts.com is HTTPS-only since 2026-10-05**: GitHub issued a certificate for the custom
+domain (it had none before) and **Enforce HTTPS** is on, so `http://` redirects to `https://`.
+`unsetbit.github.io` still redirects to `http://unsetbit.com`. Because the live site is now a
+secure context, **service workers register in production**: FMG's Workbox worker under `/dnd-map/`
+and the viewer's `sw.js` under `/dnd-view/`. Before this, caching was only Pages'
 `Cache-Control: max-age=600` plus ETag revalidation (the viewer fetches its content-hashed `?r=`
 tile, backdrop and `data.json` URLs with `cache: "force-cache"`, so those never revalidate;
-[dnd-view.md](dnd-view.md) › Tile loading). Turning on **Enforce HTTPS** for the custom
-domain (Settings → Pages) would change that.
+[dnd-view.md](dnd-view.md) › Tile loading). Bumping the map build number (and with it the viewer's
+`CACHE = "dnd-view-N"`) is now what evicts old cached copies on returning visitors.
+
+Missing paths anywhere on the site get the root `404.html` (GitHub Pages only uses the root one);
+it links back to the gallery, the wiki and the map, with a wiki-specific hint under `/rugby/`.
 
 ## Deploy checklist
 

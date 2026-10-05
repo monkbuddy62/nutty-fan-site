@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lost in the mists — pnutsuxnuts.com</title>
+<style>
+  :root { --bg: #f6efe0; --fg: #2a2118; --muted: #7d6f59; --accent: #7a2e1d; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #17140f; --fg: #f3ead8; --muted: #a8977a; --accent: #d9895b; } }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--fg);
+         font: 18px/1.5 Georgia, "Times New Roman", serif; }
+  main { max-width: 32rem; padding: 2rem 16px; text-align: center; }
+  h1 { font-size: 2rem; margin: 0 0 .5rem; letter-spacing: .02em; }
+  p { color: var(--muted); }
+  a { color: var(--accent); font-weight: 600; }
+  ul { list-style: none; padding: 0; display: flex; gap: 1.25rem; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Lost in the mists</h1>
+  <p id="msg">Nothing lives at this address.</p>
+  <ul>
+    <li><a href="/">The gallery</a></li>
+    <li><a href="/rugby/">Rugby's Roaming Wiki</a></li>
+    <li><a href="/dnd-view/">The map</a></li>
+  </ul>
+</main>
+<script>
+  if (location.pathname.indexOf("/rugby/") === 0) {
+    document.getElementById("msg").textContent =
+      "That wiki page doesn't exist (yet). Try the wiki's search: names are often spelled several ways.";
+  }
+</script>
+</body>
+</html>

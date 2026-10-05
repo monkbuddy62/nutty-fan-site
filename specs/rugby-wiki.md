@@ -21,9 +21,17 @@ view, backlinks, popovers, dark mode).
 
 `publish.py` drops Quartz's `CNAME` from the output — the repo-root `CNAME` owns the domain.
 
+Sources: 26 session transcripts plus all 15 issues of *Rugby's Roaming Gazette* (the DM's in-world
+newspaper, `monkbuddy62/rugbys-gazette`), whose page scans are shown on each issue's page.
+
+`publish.py` also fixes presentation on a staging copy: date-first titles for sessions and Gazette
+issues (so the explorer sorts chronologically), an "Also heard as" line from aliases, muted
+timestamps, The Table page (players → characters) and the home page. Dates are hidden by CSS
+except on sessions and Gazette issues, because Quartz otherwise shows the build date.
+
 ## What is public
 
-In-game lore, player first names, and in-game quotes. Never transcripts, audio, real-life talk, or
+In-game lore, player first names, Gazette issues, and in-game quotes. Never transcripts, audio, real-life talk, or
 internal files (anything in `wiki/` starting with `_` or `.`).
 
 ## Updating
