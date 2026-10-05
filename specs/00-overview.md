@@ -1,8 +1,9 @@
 # Overview
 
-`nutty-fan-site` is a static site with no build step (one exception: `map-build/` pre-renders the
-campaign map's tiles, committed like any other file), served from GitHub Pages at
-**pnutsuxnuts.com**. It hosts two unrelated deployables that share nothing but a domain.
+`nutty-fan-site` is a static site with no build step (exceptions: `map-build/` pre-renders the
+campaign map's tiles, and `rugby/` is generated from a separate repo; both are committed like any
+other file), served from GitHub Pages at **pnutsuxnuts.com**. It hosts unrelated deployables that
+share nothing but a domain.
 
 ## Site map
 
@@ -10,6 +11,7 @@ campaign map's tiles, committed like any other file), served from GitHub Pages a
 /                    the shooting gallery   index.html, script.js, style.css
 /dnd-view/           the campaign map       player viewer: pre-rendered tiles in one WebGL canvas
 /dnd-map/?edit       the map editor         vendored Fantasy Map Generator + rugby.map
+/rugby/              the campaign wiki      Quartz build output from ~/projects/rugbys-roaming-wiki
 ```
 
 | Path | What it is |
@@ -42,6 +44,7 @@ campaign map's tiles, committed like any other file), served from GitHub Pages a
 | [media-pipeline.md](media-pipeline.md) | Getting photos and videos into the game |
 | [dnd-map.md](dnd-map.md) | The vendored Fantasy Map Generator and the campaign map |
 | [dnd-view.md](dnd-view.md) | The player map viewer: tiles, taps and the info card, the tile build and its Action |
+| [rugby-wiki.md](rugby-wiki.md) | The players' campaign wiki at `/rugby/` (generated; never hand-edit) |
 | [deployment.md](deployment.md) | Pages, DNS, cache-busting, the build-number ritual |
 
 ## Difficulty
