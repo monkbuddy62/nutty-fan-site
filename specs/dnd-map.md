@@ -113,7 +113,7 @@ script carries the same suffix — since build 4 that is `main.js` and `modules/
 (patch 7). Bump the constant and every `-nutty-bN` together on every change to a patched script —
 the `?v=` change gets past the CDN and the service worker (see below), and the label shows which
 `main.js` a phone is really running: a stale copy shows its own older number, and builds before 3
-show none. Currently **4**, shared with the player viewer's "map build 4" label.
+show none. Currently **5**, shared with the player viewer's "map build 5" label.
 
 ### 6. `index.html` — players go to the viewer; the DM opens `?edit`
 
@@ -160,6 +160,7 @@ The campaign save. 4.8 MB, FMG's native `.map` format.
 - `4768801` — **mobile performance pass**: coastline auto-filter off, paper texture off, text-shadows
   stripped. 130 lines removed from the save. The map is mostly read on phones, and those three
   settings were the expensive ones. Preserve this when replacing the map.
+- **Map build 5 — the Turgythe skytrain.** A hub-and-spoke skytrain network centred on Ka: 20 major cities across the other cultures, a dense local web of Turgythe towns, and dashed under-construction extensions. Three route groups (`skytrain`, `skytrainLocal`, `skytrainBuilding`) and a tappable `skytrain` marker per station, written into the save through FMG itself by `map-build/skytrain/` (see its README). Sawyen, Suenth, the Isle of Death (Lich influenced) and the Free Isles are excluded.
 
 Replacing it: edit in FMG (locally or at azgaar.github.io), save the `.map`, and drop it in as
 `dnd-map/rugby.map`. Nothing needs to change in code — the filename is fixed. Re-check it on a

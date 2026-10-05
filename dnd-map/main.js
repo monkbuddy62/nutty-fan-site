@@ -345,7 +345,7 @@ function commitZoom() {
 
 // pnutsuxnuts.com/dnd-map patch 5: the build on screen, drawn by this file so a stale cached
 // main.js shows its own (older) number. Bump with main.js's ?v= suffix in index.html.
-const DND_MAP_BUILD = 4;
+const DND_MAP_BUILD = 5;
 {
   const tag = document.createElement("div");
   tag.id = "dndMapBuild";

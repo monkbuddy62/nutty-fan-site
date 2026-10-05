@@ -23,7 +23,7 @@ html { background: #6faebd; }
   padding: 6px 10px; font: 13px/1.2 -apple-system, system-ui, sans-serif; color: #fff; background: rgba(0,0,0,.55);
   border-radius: 14px; text-decoration: none; }
 </style>
-<link rel="stylesheet" href="viewer.css?v=4" media="print" onload="this.media='all'">
+<link rel="stylesheet" href="viewer.css?v=5" media="print" onload="this.media='all'">
 <link rel="modulepreload" href="libs/maplibre-gl-6.12.0/maplibre-gl.mjs">
 <link rel="modulepreload" href="libs/maplibre-gl-6.12.0/maplibre-gl-shared.mjs">
 </head>
@@ -31,8 +31,8 @@ html { background: #6faebd; }
 <img id="lqip" alt="" decoding="sync">
 <div id="map"></div>
 <a id="full" href="../dnd-map/?edit">Open full map</a>
-<div id="build">map build 4</div>
-<script src="meta.js?v=4"></script>
+<div id="build">map build 5</div>
+<script src="meta.js?v=5"></script>
 <script>
 // === EARLY === page-zoom guards, the shared config, the LQIP at the exact rect of the initial view, and the
 // first view's tiles started before MapLibre loads. The initial view is computed here once (hash, then the
@@ -99,6 +99,6 @@ html { background: #6faebd; }
 import * as maplibregl from "./libs/maplibre-gl-6.12.0/maplibre-gl.mjs";
 window.maplibregl = maplibregl;
 </script>
-<script src="viewer.js?v=4" defer></script>
+<script src="viewer.js?v=5" defer></script>
 </body>
 </html>
