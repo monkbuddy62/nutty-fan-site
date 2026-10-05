@@ -76,6 +76,7 @@ function showElementLockTip(event) {
 
 const onMouseMove = debounce(handleMouseMove, 100);
 function handleMouseMove() {
+  if (window.dndMapGesture) return; // pnutsuxnuts.com/dnd-map patch 7: no tooltip work mid-pinch or drag
   const point = d3.mouse(this);
   const i = findCell(point[0], point[1]); // pack cell id
   if (i === undefined) return;
@@ -116,9 +117,12 @@ function showNotes(e) {
 function showMapTooltip(point, e, i, g) {
   tip(""); // clear tip
   const path = e.composedPath ? e.composedPath() : getComposedPath(e.target); // apply polyfill
-  if (!path[path.length - 8]) return;
-  const group = path[path.length - 7].id;
-  const subgroup = path[path.length - 8].id;
+  // pnutsuxnuts.com/dnd-map patch 7: count from #viewbox, not from the path's end, which
+  // patch 2's wrapper divs around the <svg> move (specs/dnd-map.md)
+  const vb = path.findIndex(el => el.id === "viewbox");
+  if (vb < 2) return;
+  const group = path[vb - 1].id;
+  const subgroup = path[vb - 2].id;
   const land = pack.cells.h[i] >= 20;
 
   // specific elements
@@ -164,7 +168,7 @@ function showMapTooltip(point, e, i, g) {
   if (group === "terrain") return tip("Click to edit the Relief Icon");
 
   if (subgroup === "burgLabels" || subgroup === "burgIcons") {
-    const burgId = +path[path.length - 10].dataset.id;
+    const burgId = +path[vb - 4].dataset.id;
     if (burgId) {
       const burg = pack.burgs[burgId];
       const population = si(burg.population * populationRate * urbanization);
@@ -205,7 +209,7 @@ function showMapTooltip(point, e, i, g) {
   if (group === "coastline") return tip("Click to edit the coastline");
 
   if (group === "zones") {
-    const element = path[path.length - 8];
+    const element = path[vb - 2];
     const zoneId = +element.dataset.id;
     const zone = pack.zones.find(zone => zone.i === zoneId);
     tip(zone.name);

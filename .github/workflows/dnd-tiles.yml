@@ -1,0 +1,88 @@
+# Rebuilds the D&D player viewer's tile pyramid (dnd-view/t/<mapHash>/, dnd-view/meta.js) when the
+# campaign map or anything that draws it changes. `--check` decides: when meta.js already matches
+# rugby.map and the renderer (map-build/'s script, lockfile and fonts, and FMG in dnd-map/) and every
+# file has the bytes meta.rev hashed, nothing is built. `--prune` runs every time, so a tile set
+# that arrived by a merge is removed even when the tiles are current. A push made with GITHUB_TOKEN
+# does not trigger workflows, so the commit below cannot loop. See map-build/README.md.
+name: dnd-tiles
+
+on:
+  push:
+    branches: [master]          # the branch Pages serves; tags and other branches never build tiles
+    paths:
+      - "dnd-map/**"
+      - "map-build/**"
+      - "dnd-view/t/**"
+      - "dnd-view/meta.js"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild even when --check passes"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dnd-tiles-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tiles:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: map-build/package-lock.json
+
+      - name: Check
+        id: check
+        working-directory: map-build
+        run: |
+          if [ "${{ inputs.force }}" = "true" ]; then
+            echo "forced rebuild"; echo "stale=true" >> "$GITHUB_OUTPUT"
+          elif node build-map-tiles.mjs --check; then
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install
+        if: steps.check.outputs.stale == 'true'
+        working-directory: map-build
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Build
+        if: steps.check.outputs.stale == 'true'
+        working-directory: map-build
+        run: node build-map-tiles.mjs
+
+      - name: Prune and verify
+        working-directory: map-build
+        run: |
+          node build-map-tiles.mjs --prune
+          node build-map-tiles.mjs --check
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A dnd-view/meta.js dnd-view/t
+          if git diff --cached --quiet; then echo "tiles already up to date"; exit 0; fi
+          hash=$(node -e 'const s=require("fs").readFileSync("dnd-view/meta.js","utf8");console.log(JSON.parse(s.replace(/^window\.DND_META = /,"").replace(/;\s*$/,"")).mapHash)')
+          git commit -q -m "dnd-view: tiles for map ${hash}"
+          for i in 1 2 3; do
+            git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            git pull --rebase origin "${GITHUB_REF_NAME}"
+          done
+          exit 1

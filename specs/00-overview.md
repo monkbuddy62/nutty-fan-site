@@ -1,13 +1,15 @@
 # Overview
 
-`nutty-fan-site` is a static site with no build step, served from GitHub Pages at
+`nutty-fan-site` is a static site with no build step (one exception: `map-build/` pre-renders the
+campaign map's tiles, committed like any other file), served from GitHub Pages at
 **pnutsuxnuts.com**. It hosts two unrelated deployables that share nothing but a domain.
 
 ## Site map
 
 ```
 /                    the shooting gallery   index.html, script.js, style.css
-/dnd-map/            the campaign map       vendored Fantasy Map Generator + rugby.map
+/dnd-view/           the campaign map       player viewer: pre-rendered tiles in one WebGL canvas
+/dnd-map/?edit       the map editor         vendored Fantasy Map Generator + rugby.map
 ```
 
 | Path | What it is |
@@ -22,6 +24,8 @@
 | `boss/` | Jake's four sprites + Ozamatron's billboard, parts-sheet, and TV-face textures. |
 | `audio/` | Theme music (gallery theme, the stage-3 mixdown). The 20 voice clips are **not in the repo** — see `audio.md`. |
 | `dnd-map/` | Vendored upstream code. Do not hand-edit; see `dnd-map.md`. |
+| `dnd-view/` | The player map viewer (hand-written) plus its generated tiles, `meta.js` and `data.json`; see `dnd-view.md`. |
+| `map-build/` | Generates `dnd-view/`'s tiles from FMG (Node + Playwright) — the one build step; see `dnd-view.md`. |
 | `build-manifest.py`, `convert-heic.sh` | The media ingestion scripts. |
 
 ## Spec index
@@ -37,6 +41,7 @@
 | [audio.md](audio.md) | Synthesised SFX and the Nutty voice-clip pool |
 | [media-pipeline.md](media-pipeline.md) | Getting photos and videos into the game |
 | [dnd-map.md](dnd-map.md) | The vendored Fantasy Map Generator and the campaign map |
+| [dnd-view.md](dnd-view.md) | The player map viewer: tiles, taps and the info card, the tile build and its Action |
 | [deployment.md](deployment.md) | Pages, DNS, cache-busting, the build-number ritual |
 
 ## Difficulty

@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>/* pnutsuxnuts.com/dnd-map patch 6: players get the fast viewer; ?edit (or ?maplink=, ?seed=) keeps FMG (specs/dnd-map.md) */ (function (q) { if (!q.has("edit") && !q.has("maplink") && !q.has("seed")) { window.stop(); location.replace("../dnd-view/" + location.hash); } })(new URLSearchParams(location.search));</script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
@@ -165,8 +166,9 @@
         this.rel = 'stylesheet';
       "
     />
-    <script type="module" crossorigin src="/dnd-map/index-CT-LUFbs.js"></script>
-    <link rel="stylesheet" crossorigin href="/dnd-map/index-B3l7mx48.css">
+    <!-- pnutsuxnuts.com/dnd-map patch 5: relative paths, so any host path serves it -->
+    <script type="module" crossorigin src="./index-CT-LUFbs.js"></script>
+    <link rel="stylesheet" crossorigin href="./index-B3l7mx48.css">
   </head>
   <body>
     <svg
@@ -1891,9 +1893,10 @@
               <td></td>
               <td>Azgaar assistant</td>
               <td>
+                <!-- pnutsuxnuts.com/dnd-map patch 4: Assistant chat off unless chosen -->
                 <select id="azgaarAssistant" data-stored="azgaarAssistant">
-                  <option value="show" selected>Show</option>
-                  <option value="hide">Hide</option>
+                  <option value="show">Show</option>
+                  <option value="hide" selected>Hide</option>
                 </select>
               </td>
             </tr>
@@ -8547,9 +8550,9 @@
     <script defer src="modules/ui/layers.js?v=1.122.2"></script>
     <script defer src="modules/ui/measurers.js?v=1.99.00"></script>
     <script defer src="modules/ui/style-presets.js?v=1.100.00"></script>
-    <script defer src="modules/ui/general.js?v=1.120.5"></script>
+    <script defer src="modules/ui/general.js?v=1.120.5-nutty-b4"></script>
     <script defer src="modules/ui/options.js?v=1.120.5"></script>
-    <script defer src="main.js?v=1.120.5"></script>
+    <script defer src="main.js?v=1.120.5-nutty-b4"></script>
 
     <script defer src="modules/ui/style.js?v=1.122.0"></script>
     <script defer src="modules/ui/editors.js?v=1.122.11"></script>
