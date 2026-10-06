@@ -113,7 +113,7 @@ script carries the same suffix — since build 4 that is `main.js` and `modules/
 (patch 7). Bump the constant and every `-nutty-bN` together on every change to a patched script —
 the `?v=` change gets past the CDN and the service worker (see below), and the label shows which
 `main.js` a phone is really running: a stale copy shows its own older number, and builds before 3
-show none. Currently **6**, shared with the player viewer's "map build 6" label.
+show none. Currently **7**, shared with the player viewer's "map build 7" label.
 
 ### 6. `index.html` — players go to the viewer; the DM opens `?edit`
 
@@ -166,6 +166,11 @@ The campaign save. 4.8 MB, FMG's native `.map` format.
   **East Squiyles (Lawless)**; the lower-right island chain became **Jessigath**. New cultures, towns
   re-cultured to match, and refitted FMG-native labels (West/East Squiyles with subtitles, Changelings,
   Troll Mountains, Jessigath), all written through FMG by `map-build/lore/` (see its README).
+- **Map build 7 — a proposed skytrain; Jessigath grows.** The skytrain is now *proposed*, for the
+  players' test flight: every route dashed, every stop a 🚧 "(proposed)" card listing its proposed
+  lines, Ka still the 🚉 hub. Flipped with `map-build/skytrain/set-status.mjs proposed`, which
+  `… open` reverses exactly (build 5's look and text). The far bottom-right island moved from Binneth
+  to Jessigath.
 
 Replacing it: edit in FMG (locally or at azgaar.github.io), save the `.map`, and drop it in as
 `dnd-map/rugby.map`. Nothing needs to change in code — the filename is fixed. Re-check it on a

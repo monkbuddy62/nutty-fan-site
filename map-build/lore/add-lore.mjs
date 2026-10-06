@@ -12,7 +12,7 @@ const CFG = {
   SPLIT_X: 955,                  // Territories east of this x (the Troll Mountains) become East Squiyles
   WEST_TAKES: 0.3,               // share of Changeling land West Squiyles has taken
   HOLDOUT_FEATURES: [47],        // islet off the old west coast: the New Republic's stronghold
-  JESSIGATH_FEATURES: [14, 15, 16, 22, 25, 35, 37, 41, 46],
+  JESSIGATH_FEATURES: [14, 15, 16, 22, 25, 35, 37, 41, 46, 57], // 57: the far bottom-right island, taken from Binneth (build 7)
   WEST: { name: "West Squiyles", color: "#e2eef6", sub: "(New Republic)" },
   EAST: { name: "East Squiyles", color: "#ece9df", code: "ES", sub: "(Lawless)" },
   JESSIGATH: { name: "Jessigath", color: "#b9e2d6", code: "Je" },
@@ -243,7 +243,8 @@ try {
     fit({ id: reuse("Changelings"), text: "Changelings", pts: regionPts(isC(CFG.CHANGELINGS)), where: isC(CFG.CHANGELINGS), size: 70, at: [911, 489] });
     fit({ id: reuse("Eastern Territories"), text: CFG.EAST.name, pts: regionPts(isC(east.i)), where: isC(east.i), size: 80, sub: { text: CFG.EAST.sub } });
     // Jessigath sits in the water beside its chain, along the chain's axis
-    const jpts = regionPts(isC(jess.i));
+    // label the main chain; the lone far-south island (57) would drag the name over beside Paengju
+    const jpts = regionPts((k) => isC(jess.i)(k) && cells.f[k] !== 57);
     const jax = axisOf(jpts, 90);
     fit({ id: "labelJessigath", text: CFG.JESSIGATH.name, pts: jpts, where: (k) => !land(k) || isC(jess.i)(k), maxDeg: 90, fill: 0.55, size: 80, offsetOut: Math.sign(jax.nrm[0]) * -0.34 * jax.L });
     scale = scale0; invokeActiveZooming();

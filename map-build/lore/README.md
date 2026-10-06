@@ -21,7 +21,7 @@ Regions are FMG cultures (the painted regions the campaign calls kingdoms).
   `WEST_TAKES` (30%) of the Changelings' land, grown by BFS from the shared frontier, plus the islet
   feature 47 with a 🏰 **Republic Stronghold** marker.
 - **East Squiyles (Lawless)**: a new culture for the Territories east of `SPLIT_X` (the Troll Mountains).
-- **Jessigath**: a new culture over the lower-right island chain (features in `JESSIGATH_FEATURES`).
+- **Jessigath**: a new culture over the lower-right island chain (features in `JESSIGATH_FEATURES`; build 7 added 57, the far bottom-right island, from Binneth). Its label is fitted to the main chain without 57, which would drag it over beside Paengju.
 - Towns standing on changed cells take the new culture, so their tap cards name the new region.
 
 ## Labels

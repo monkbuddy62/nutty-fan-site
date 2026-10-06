@@ -4,6 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { startServer, launch, openFmg } from "../build-map-tiles.mjs";
+import { STYLE as STYLES, SIZE, stationMarker } from "./status.mjs";
 
 const REPO = path.resolve(path.dirname(new URL(import.meta.url).pathname), "../..");
 const MAP = path.join(REPO, "dnd-map/rugby.map");
@@ -13,13 +14,7 @@ const out = args.includes("--out") ? args[args.indexOf("--out") + 1] : MAP;
 
 const BEND = 0.12;      // arc control-point offset, fraction of segment length
 const SAMPLES_PER_UNIT = 0.25; // route points per map unit along the arc
-const STYLE = {
-  skytrain: { opacity: 0.85, stroke: "#9ff3ff", "stroke-width": 0.8, "stroke-dasharray": "", "stroke-linecap": "round" },
-  skytrainLocal: { opacity: 0.85, stroke: "#9ff3ff", "stroke-width": 0.5, "stroke-dasharray": "", "stroke-linecap": "round" },
-  skytrainBuilding: { opacity: 0.55, stroke: "#9ff3ff", "stroke-width": 0.5, "stroke-dasharray": "2.5 2", "stroke-linecap": "butt" },
-};
-const ICON = { hub: "🚉", major: "🚝", local: "🚝", planned: "🚧", "planned-local": "🚧" };
-const SIZE = { hub: 34, major: 26, local: 18, planned: 22, "planned-local": 16 };
+const STYLE = STYLES.open;    // built open; set-status.mjs flips it
 
 const S = new Map(net.stations.map((s) => [s.id, s]));
 function arc(a, b) {
@@ -38,18 +33,7 @@ const routes = net.segments.map((g) => ({
   points: arc(S.get(g.from), S.get(g.to)),
   name: `Skytrain: ${S.get(g.from).name} – ${S.get(g.to).name}${g.status === "construction" ? " (under construction)" : ""}`,
 }));
-const markers = net.stations.map((s) => {
-  const open = s.links.filter((l) => l.status === "open").map((l) => l.to);
-  const building = s.links.filter((l) => l.status !== "open").map((l) => l.to);
-  const planned = s.role.startsWith("planned");
-  const name = s.role === "hub" ? `${s.name} — Skytrain Central` : `${s.name} Skytrain ${planned ? "Station (under construction)" : "Station"}`;
-  let legend = s.role === "hub"
-    ? "The heart of Turgythe's skytrain network, ten years in the building and still growing. "
-    : planned ? "A station still under construction on the expanding skytrain network. " : "";
-  if (open.length) legend += `Lines to ${open.join(", ")}. `;
-  if (building.length) legend += `Under construction: ${building.join(", ")}.`;
-  return { x: s.x, y: s.y, icon: ICON[s.role], size: SIZE[s.role], name, legend: legend.trim() };
-});
+const markers = net.stations.map((s) => ({ x: s.x, y: s.y, size: SIZE[s.role], ...stationMarker(s, "open") }));
 
 const srv = await startServer();
 const browser = await launch();

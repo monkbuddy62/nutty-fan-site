@@ -54,3 +54,25 @@ does not ship for Ubuntu 20.04 arm64 (OR-01); build 5 ran both in
 The save happens in a headless page, so `add-skytrain.mjs` opens it at the map's own 1600 × 731 and strips
 the inline `style` that dnd-map patch 2 pins on `<svg id="map">`. Saved marker sizes reflect the zoom at
 save time; FMG recomputes them on every zoom.
+
+## Open or proposed
+
+The network has two looks, defined once in `status.mjs`:
+
+| Mode | Lines | Stops |
+|---|---|---|
+| `open` (build 5) | solid, under-construction extensions dashed | 🚉 hub, 🚝 stations, 🚧 under construction; "Lines to …" |
+| `proposed` (build 7, live) | every line dashed, trunks still heavier | 🚉 hub, 🚧 everywhere else; "(proposed)", "Proposed lines to …" |
+
+To flip the map already in `dnd-map/rugby.map`:
+
+```bash
+cd map-build
+node skytrain/set-status.mjs open        # or: proposed   (add --preview <dir> for a screenshot instead)
+```
+
+It restyles the three route groups (stamping `data-skytrain="<mode>"` on them) and rewrites each station
+marker's icon and note, matched to `skytrain.json` by position, then saves through FMG. Then rebuild the
+tiles and bump the map build number as usual: about 15 minutes end to end. `add-skytrain.mjs` builds in
+`open`; both scripts take their text from `status.mjs`, so a flip back to `open` restores build 5's cards
+character for character (checked: 52 of 52).

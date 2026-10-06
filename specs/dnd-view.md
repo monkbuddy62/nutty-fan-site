@@ -521,7 +521,7 @@ visits rely on the HTTP cache: `force-cache` for the `?r=` URLs (Tile loading), 
 **Enforce HTTPS** for the custom domain.
 
 What it does where it can run: `sw.js`, scope `dnd-view/`, registered only on https in a secure
-context. Cache-first for same-origin GETs under `libs/` (versioned paths; cache **`dnd-view-6`**)
+context. Cache-first for same-origin GETs under `libs/` (versioned paths; cache **`dnd-view-7`**)
 and under `t/` **only with an `?r=` query** (the content hash, so the URL is immutable even when a
 re-render keeps the map hash; one cache per tile version, `dnd-view-4/t/<hash>?r=<rev>`), whole
 200 basic responses only, no Range requests, writes held by `waitUntil`. The first tile request
@@ -583,7 +583,7 @@ min). Every run then prunes other 12-hex tile directories, re-checks, and commit
 | `GRID_UNITS` | 16 | ~5 sites per bucket; a lookup visits 1-2 rings (0.075 ms per pick here). |
 | `GRID_SLICE_MS` | 8 | Grid build tasks stay well under a 16 ms frame. |
 | `RING_PX`, `RING_STROKE_PX`, `RING_RGB` | 14, 3, `#ffd23f` | Visible on land, sea and the pale card colours; the stroke lies outside the radius, as MapLibre's circle stroke did. |
-| sw `CACHE` | `dnd-view-6` | Follows the build number. Inert on the live http-only hosts. |
+| sw `CACHE` | `dnd-view-7` | Follows the build number. Inert on the live http-only hosts. |
 | `MAX_S`, `VIEW_KEY`, the loader, the hash parser | | Defined once, in `index.html`'s EARLY script (`window.DND_CFG`); `viewer.js`'s config block reads them. |
 
 ## Acceptance
