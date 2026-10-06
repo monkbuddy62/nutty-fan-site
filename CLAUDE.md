@@ -24,7 +24,7 @@ viewer's tiles into `dnd-view/t/<mapHash>/` and `dnd-view/meta.js`. Its output i
 served as-is. The `dnd-tiles` Action reruns it on `master` when `dnd-map/` (the map or FMG) or
 `map-build/` changes (only once Actions are enabled on the fork); until then, after changing either,
 rebuild locally with the recipe in `specs/deployment.md` (it needs `npx playwright install chromium`
-once per machine; 6-10 min on 2 cores) and commit the output in the same commit.
+once per machine; ~2.5 min on OR-02, whose 12 cores the parallel tile pass uses; 6-10 min on 2 cores) and commit the output in the same commit.
 `node build-map-tiles.mjs --check` says whether the tiles are current. Never hand-edit
 `dnd-view/t/**` or `dnd-view/meta.js`.
 
@@ -52,7 +52,7 @@ adding a stage adds a place:
 <script src="suess.js?v=28"></script>            <!-- line 65 -->
 ```
 
-The campaign map has its own number, the **map build number** (currently 7), shared by both parts:
+The campaign map has its own number, the **map build number** (currently 8), shared by both parts:
 bump FMG's `DND_MAP_BUILD` and its `-nutty-bN` query strings (`specs/dnd-map.md`) and, in
 `dnd-view/index.html`, the `?v=N` on `meta.js`, `viewer.css` and `viewer.js` plus the "map build N"
 label, and `CACHE = "dnd-view-N"` in `dnd-view/sw.js` — all to the same N.

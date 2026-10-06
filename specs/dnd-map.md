@@ -113,7 +113,7 @@ script carries the same suffix — since build 4 that is `main.js` and `modules/
 (patch 7). Bump the constant and every `-nutty-bN` together on every change to a patched script —
 the `?v=` change gets past the CDN and the service worker (see below), and the label shows which
 `main.js` a phone is really running: a stale copy shows its own older number, and builds before 3
-show none. Currently **7**, shared with the player viewer's "map build 7" label.
+show none. Currently **8**, shared with the player viewer's "map build 8" label.
 
 ### 6. `index.html` — players go to the viewer; the DM opens `?edit`
 
@@ -171,6 +171,9 @@ The campaign save. 4.8 MB, FMG's native `.map` format.
   lines, Ka still the 🚉 hub. Flipped with `map-build/skytrain/set-status.mjs proposed`, which
   `… open` reverses exactly (build 5's look and text). The far bottom-right island moved from Binneth
   to Jessigath.
+- **Map build 8 — skytrain off.** The skytrain is switched off for now (`set-status.mjs off`): its
+  route groups hidden and its 52 station markers flagged hidden, their proposed look and text kept.
+  `set-status.mjs proposed` (or `open`) brings it back.
 
 Replacing it: edit in FMG (locally or at azgaar.github.io), save the `.map`, and drop it in as
 `dnd-map/rugby.map`. Nothing needs to change in code — the filename is fixed. Re-check it on a

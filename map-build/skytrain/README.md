@@ -62,13 +62,18 @@ The network has two looks, defined once in `status.mjs`:
 | Mode | Lines | Stops |
 |---|---|---|
 | `open` (build 5) | solid, under-construction extensions dashed | 🚉 hub, 🚝 stations, 🚧 under construction; "Lines to …" |
-| `proposed` (build 7, live) | every line dashed, trunks still heavier | 🚉 hub, 🚧 everywhere else; "(proposed)", "Proposed lines to …" |
+| `proposed` (build 7) | every line dashed, trunks still heavier | 🚉 hub, 🚧 everywhere else; "(proposed)", "Proposed lines to …" |
+| `off` (build 8, live) | route groups `display: none` | markers `hidden: true`, elements removed (FMG's convention; tap data skips them) |
+
+`off` keeps whatever look and text the stations had, so `off` then `proposed` gives back build 7. One FMG quirk:
+toggling the Markers layer in the editor redraws every marker, hidden ones included, so don't save the map
+from the editor after doing that while the skytrain is off.
 
 To flip the map already in `dnd-map/rugby.map`:
 
 ```bash
 cd map-build
-node skytrain/set-status.mjs open        # or: proposed   (add --preview <dir> for a screenshot instead)
+node skytrain/set-status.mjs open        # or: proposed, off   (add --preview <dir> for a screenshot instead)
 ```
 
 It restyles the three route groups (stamping `data-skytrain="<mode>"` on them) and rewrites each station

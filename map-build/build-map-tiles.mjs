@@ -25,6 +25,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 
 // === CONFIG ===
@@ -43,6 +44,8 @@ export const WEBP_Q = 0.85;
 export const LQIP_W = 64;         // LQIP width px
 export const FMG_PATH = "/dnd-map/index.html?edit"; // ?edit: never the viewer redirect
 export const HASH_LEN = 12;
+// parallel FMG tabs for the tile pass (--jobs / DND_TILE_JOBS): one per spare core, at most 6 (~1 GB each)
+export const DEFAULT_JOBS = Math.max(1, Math.min(6, +(process.env.DND_TILE_JOBS || 0) || os.cpus().length - 1));
 export const HASH_DIR_RE = /^[0-9a-f]{12}$/; // the only names under dnd-view/t/ that --prune may delete
 // Cell sites at map units * 100: FMG stores them with 2 decimals, so these ints are exact and the viewer's
 // nearest-site lookup equals findCell (500/500 sampled; at * 10 rounding flipped 6 near-ties in 500).
@@ -447,7 +450,7 @@ export function prune({ mapFile = DEFAULT_MAP, outDir = DEFAULT_OUT } = {}) {
 }
 
 // === BUILD ===
-export async function build({ levels = parseLevels(`0-${MAX_LEVEL}`), mapFile = DEFAULT_MAP, outDir = DEFAULT_OUT, say = console.log } = {}) {
+export async function build({ levels = parseLevels(`0-${MAX_LEVEL}`), mapFile = DEFAULT_MAP, outDir = DEFAULT_OUT, jobs = DEFAULT_JOBS, say = console.log } = {}) {
   const tStart = Date.now();
   const { mapHash, mapBytes } = mapInfo(mapFile);
   const rendererAtStart = rendererHash();   // read before rendering: an edit during the run fails the next --check
@@ -459,7 +462,7 @@ export async function build({ levels = parseLevels(`0-${MAX_LEVEL}`), mapFile = 
     const fonts = await prepare(fmg.page, fmg.log);
     const markerFonts = await checkMarkerFonts(fmg.page);
     const { width, height } = fonts, { world, zOffset } = worldGeom(width, height);
-    say(`map ${mapHash} ${mapBytes} B, ${width}x${height}, world ${world}, zOffset ${zOffset}; FMG ready in ${fmg.loadMs} ms`);
+    say(`map ${mapHash} ${mapBytes} B, ${width}x${height}, world ${world}, zOffset ${zOffset}; FMG ready in ${fmg.loadMs} ms; ${jobs} tab${jobs > 1 ? "s" : ""}`);
     say(`fonts served: ${[...new Set(fmg.log.fonts)].join(" ")}; aborted hosts: ${[...new Set(fmg.log.aborted)].join(" ") || "none"}`);
     say(`marker icon fonts: ${Object.entries(markerFonts).map(([k, v]) => `${k}=${v.join("/")}`).join(" ")}`);
     if (fmg.log.errors.length) say(`page errors: ${fmg.log.errors.join(" | ")}`);
@@ -483,22 +486,42 @@ export async function build({ levels = parseLevels(`0-${MAX_LEVEL}`), mapFile = 
     writeIfChanged(path.join(hashDir, "backdrop.webp"), bd.backdrop);
     say(`backdrop ${bd.backdrop.length} B; lqip ${bd.lqipSize.join("x")} ${bd.lqip.length} chars; bg ${bd.bg} (${(100 * bd.rimShare).toFixed(1)}% of the rim)`);
 
+    // tiles: windows of every level go on one queue, drained by `jobs` FMG tabs in parallel. A capture depends
+    // only on (level, window): setLevel fixes the zoom state, captureWindow re-places #viewbox, so the bytes
+    // are the same whichever tab draws a window and in what order.
+    // Each extra tab gets its own Chromium: tabs of one browser share its compositor, which capped 6 tabs at ~2.3x.
+    const workers = [{ page: fmg.page, enc }];
+    const extra = await Promise.all(Array.from({ length: jobs - 1 }, async () => {
+      const b = await launch(), w = await openFmg(b, srv.origin);
+      await prepare(w.page, w.log);
+      return { page: w.page, enc: await openEncoder(b), browser: b };
+    }));
+    workers.push(...extra);
+    const queue = [];
+    for (const n of levels) { const g = levelGeom(n, width, height); for (let wy = 0; wy < g.winY; wy++) for (let wx = 0; wx < g.winX; wx++) queue.push({ n, wx, wy }); }
+    const per = new Map(levels.map(n => [n, { tiles: 0, bytes: 0, written: 0, t0: Infinity, t1: 0 }]));
+    await Promise.all(workers.map(async w => {
+      let cur = -1;
+      for (let job = queue.shift(); job; job = queue.shift()) {
+        const { n, wx, wy } = job, L = per.get(n);
+        L.t0 = Math.min(L.t0, Date.now());
+        if (n !== cur) { await setLevel(w.page, n); cur = n; }
+        const png = await captureWindow(w.page, n, wx, wy);
+        for (const t of await encodeWindow(w.enc, png, n, wx, wy, width, height)) {
+          if (writeIfChanged(path.join(outDir, tileRel(mapHash, n + zOffset, t.tx, t.ty)), t.webp)) L.written++;
+          L.tiles++; L.bytes += t.webp.length;
+        }
+        L.t1 = Date.now();
+      }
+    }));
     const stats = [];
     for (const n of levels) {
-      const g = levelGeom(n, width, height), t0 = Date.now();
-      await setLevel(fmg.page, n);
-      let tiles = 0, bytes = 0, written = 0;
-      for (let wy = 0; wy < g.winY; wy++) for (let wx = 0; wx < g.winX; wx++) {
-        const png = await captureWindow(fmg.page, n, wx, wy);
-        for (const t of await encodeWindow(enc, png, n, wx, wy, width, height)) {
-          if (writeIfChanged(path.join(outDir, tileRel(mapHash, n + zOffset, t.tx, t.ty)), t.webp)) written++;
-          tiles++; bytes += t.webp.length;
-        }
-      }
-      if (tiles !== g.tiles) throw new Error(`level ${n}: ${tiles} tiles, expected ${g.tiles}`);
-      stats.push({ n, z: n + zOffset, windows: g.winX * g.winY, tiles, bytes, written, s: (Date.now() - t0) / 1000 });
-      say(`L${n} (z${n + zOffset}): ${g.winX * g.winY} windows, ${tiles} tiles, ${(bytes / 1e6).toFixed(2)} MB, ${written} files written, ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+      const g = levelGeom(n, width, height), L = per.get(n), s = (L.t1 - L.t0) / 1000;
+      if (L.tiles !== g.tiles) throw new Error(`level ${n}: ${L.tiles} tiles, expected ${g.tiles}`);
+      stats.push({ n, z: n + zOffset, windows: g.winX * g.winY, tiles: L.tiles, bytes: L.bytes, written: L.written, s });
+      say(`L${n} (z${n + zOffset}): ${g.winX * g.winY} windows, ${L.tiles} tiles, ${(L.bytes / 1e6).toFixed(2)} MB, ${L.written} files written, ${s.toFixed(1)} s`);
     }
+    for (const w of extra) await w.browser.close();
     await enc.close();
 
     const meta = { v: 1, mapHash, mapBytes, width, height, world, zOffset, maxLevel: MAX_LEVEL, labelDpr: LABEL_DPR, tileSize: TILE,
@@ -522,13 +545,14 @@ export async function build({ levels = parseLevels(`0-${MAX_LEVEL}`), mapFile = 
 
 // === CLI ===
 function parseArgs(argv) {
-  const a = { levels: `0-${MAX_LEVEL}`, check: false, prune: false, map: process.env.DND_MAP_FILE || DEFAULT_MAP, out: DEFAULT_OUT };
+  const a = { levels: `0-${MAX_LEVEL}`, jobs: DEFAULT_JOBS, check: false, prune: false, map: process.env.DND_MAP_FILE || DEFAULT_MAP, out: DEFAULT_OUT };
   const value = i => { const v = argv[i + 1]; if (v === undefined || v.startsWith("--")) throw new Error(`missing value for ${argv[i]}`); return v; };
   for (let i = 0; i < argv.length; i++) {
     const k = argv[i];
     if (k === "--check") a.check = true;
     else if (k === "--prune") a.prune = true;
     else if (k === "--levels") a.levels = value(i++);
+    else if (k === "--jobs") a.jobs = Math.max(1, parseInt(value(i++), 10) || 1);
     else if (k === "--map") a.map = path.resolve(value(i++));
     else if (k === "--out") a.out = path.resolve(value(i++));
     else throw new Error(`unknown argument ${k}`);
@@ -548,7 +572,7 @@ async function main() {
     console.log(`pruned ${removed.length ? removed.join(" ") : "nothing"}`);
     return;
   }
-  const r = await build({ levels: parseLevels(a.levels), mapFile: a.map, outDir: a.out });
+  const r = await build({ levels: parseLevels(a.levels), mapFile: a.map, outDir: a.out, jobs: a.jobs });
   if (!r.metaWritten) process.exit(2);   // nothing published: a following --prune or --check must not run
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) main().catch(e => { console.error(e); process.exit(1); });

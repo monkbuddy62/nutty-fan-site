@@ -31,7 +31,8 @@ rugby with the build-4 script wrote 0 of 6,157 tiles).
 cd map-build
 npm ci                                   # playwright 1.63.0
 npx playwright install chromium          # once per machine (--with-deps on a bare Linux box)
-node build-map-tiles.mjs                 # full build, levels 0-5 (6-10 min on 2 cores)
+node build-map-tiles.mjs                 # full build, levels 0-5 (~2.5 min on OR-02 with 6 jobs; 6-10 min on 2 cores)
+node build-map-tiles.mjs --jobs 1        # one tab (default: one per spare core, max 6; or DND_TILE_JOBS)
 node build-map-tiles.mjs --levels 0-3    # quick run; data.json and the backdrop are always complete
 node build-map-tiles.mjs --check         # exit 0 if meta.js matches rugby.map and the renderer, and every file has meta.rev's bytes
 node build-map-tiles.mjs --prune         # delete dnd-view/t/<12-hex>/ dirs other than meta.js's and the map's
@@ -76,3 +77,14 @@ they point at newer file versions that are not vendored, and the current map nev
 Comfortaa (burg labels) is declared nowhere, so the build pins it to `local('Liberation Serif')`,
 the Times-metric serif an iPhone falls back to. Other text uses whatever the machine's fontconfig
 resolves, so tiles built on another OS image can differ in a few glyphs.
+
+## Parallel tiles
+
+The tile pass puts every window of every level on one queue and drains it with `--jobs` workers, each its
+own Chromium with its own FMG tab and WebP encoder (data.json and the backdrop stay on the first). A
+capture depends only on (level, window), since `setLevel` fixes the zoom state and `captureWindow` re-places
+`#viewbox`, so the bytes don't depend on which worker drew a window or when: a 6-job build of map build 7
+matched the single-tab tiles byte for byte (same `rev`, `diff -r` clean). Separate browsers matter: six tabs
+of one Chromium share its compositor and reached only ~2.3× (level 5: 466 → 200 s); six browsers ~5×
+(level 4: 130 → 26 s). Ten jobs were no faster than six on OR-02's 12 cores. Each worker costs ~1 GB.
+
